@@ -10,3 +10,11 @@ Clicking with the mouse anywhere on the screen creates a potential barrier in th
 
 # Installation
 This is a preliminary version of the game and requires OpenCL GPU acceleration to run. For now, it can only run on Linux with X11 (no Wayland support yet).
+
+# Wish list
+Support for more platforms
+OpenCL/OpenGL integration
+Make it event driven
+Make the window dimensions independent of the simulation dimensions
+Better visualization of the objects on the screen
+Implement magnetic fields, electric fields, optical fields
