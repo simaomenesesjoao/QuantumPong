@@ -1,5 +1,5 @@
 # QuantumPong
-A quantum version of the classic Pong game. Each user controls a paddle and bounces the electron wavefunction around until it diffracts away! The top and bottom edges absorb the wavefunction. A player loses when more than 50% of the original wavefunction has been absorbed on their side. Youtube video showing how it looks like: https://studio.youtube.com/video/oA7VtZ_YcGI/edit
+A quantum version of the classic Pong game. Each user controls a paddle and bounces the electron wavefunction around until it diffracts away! The top and bottom edges absorb the wavefunction. A player loses when more than 50% of the original wavefunction has been absorbed on their side. Youtube video showing how it looks like: https://www.youtube.com/shorts/oA7VtZ_YcGI
 
 ## Controls
 The top player controls the paddle using the ASDW keys
