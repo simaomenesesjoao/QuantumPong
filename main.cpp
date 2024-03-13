@@ -6,7 +6,6 @@
 // OpenCL has to be included before X11! Are there function name conflicts??
 #include "opencl.hpp"
 #include "x11.hpp"
-//#include <X11/keysym.h>
 
 void handleEvent(x11 *vis, kpm *eng) {
     unsigned ix = eng->Lx/2;
@@ -14,6 +13,12 @@ void handleEvent(x11 *vis, kpm *eng) {
     float kx = 0.5;
     float ky = 1.0;
     float broad = 20.0;
+
+    unsigned paddle_x = 100;
+    unsigned paddle_y_bot = 50;
+    unsigned paddle_y_top = eng->Ly-50;
+    unsigned paddle_width = 100;
+    unsigned paddle_height = 20;
 
     float current_max;
     KeyCode keyCode;
@@ -85,11 +90,15 @@ void handleEvent(x11 *vis, kpm *eng) {
                         std::cout << "current max: " << current_max << "\n";
                         break;
 
+                    // reset
                     case 27:
                         std::cout << "reset" << current_max << "\n";
                         eng->set_H();
                         eng->initialize_wf(ix, iy, kx, ky, broad);
                         eng->reset_state();
+                        eng->init_paddles(paddle_x, paddle_y_top, paddle_x, paddle_y_bot, paddle_width, paddle_height);
+                        eng->update_paddles(paddle_x, paddle_y_top, paddle_x, paddle_y_bot);
+
 
                         break;
                 }
