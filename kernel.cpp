@@ -1,38 +1,131 @@
 #define prod(a,b)(float2)(a.x*b.x-a.y*b.y, a.x*b.y+a.y*b.x)
 
-void kernel set_sq(__global float2 *hops, __global float *SCALE){
+void kernel set_sq(__global float2 *hops, __global float *scale){
 
-    //int L = LX + 2*PAD;
-    //int j = (get_global_id(1)-PAD)*L + (get_global_id(0)-PAD);
+    //int l = lx + 2*pad;
+    //int j = (get_global_id(1)-pad)*l + (get_global_id(0)-pad);
     int i = get_global_id(1)*LX + get_global_id(0);
     int j5 = NHOPS*i;
-    float t = -1.0/SCALE[0];
+    float t = -1.0/scale[0];
 
-    hops[j5+0] = (float2)(0.0, 0.0); // Local potential
+    hops[j5+0] = (float2)(0.0, 0.0); // local potential
     hops[j5+1] = (float2)(  t, 0.0); // from the left
     hops[j5+2] = (float2)(  t, 0.0); // from the right
     hops[j5+3] = (float2)(  t, 0.0); // from up
     hops[j5+4] = (float2)(  t, 0.0); // from down
 
-    //if(get_global_id(1)==100)
-        //hops[j5+3] = (float2)(0.0, 0.0); // from up
+}
+
+void kernel set_sq_B(__global float2 *hops, __global float *SCALE, __global float *B, __global float *V){
+
+    int x = get_global_id(0);
+    int y = get_global_id(1);
+
+    int i = y*LX + x;
+    int i5 = NHOPS*i;
+    int L = LX+2*PAD;
+    int j = (y+PAD)*L + (x+PAD);
+
+    float t = -1.0/SCALE[0];
+
+    float arg1 = 0.5*(B[j]+B[j-1])*y;
+    float arg2 = 0.5*(B[j]+B[j+1])*y;
+    float localV = V[i]/SCALE[0];
+    //if( B[j-1]*B[j-1] > 0.1)
+        //printf("B: %f %f %f", B[j], B[j-1], B[j+1]);
+
+    //float arg1 = 0;
+    //float arg2 = 0;
+    //float localV = 0;
+
+    float2 peierls1 = (float2)(t*cos(arg1),  t*sin(arg1));
+    float2 peierls2 = (float2)(t*cos(arg2), -t*sin(arg2));
+
+    hops[i5+0] = (float2)(localV, 0.0); // Local potential
+    hops[i5+1] = peierls1;
+    hops[i5+2] = peierls2;
+    hops[i5+3] = (float2)(  t, 0.0); // from up
+    hops[i5+4] = (float2)(  t, 0.0); // from down
+
 }
 
 
-void kernel set_local_pot(__global float2 *hops, __global float *SCALE, __global float *val){
+void kernel set_local_pot(__global float *local_pot, __global float *val){
 
-    int i = get_global_id(1)*LX + get_global_id(0);
+    int x = get_global_id(0);
+    int y = get_global_id(1);
+    int i = y*LX + x;
+    //int j5 = NHOPS*i;
+
+    // Get the radius, assumes that the global sizes have the same dimension
+    int rad = get_global_size(0)/2;
+
+    int x0 = get_global_offset(0);
+    int y0 = get_global_offset(1);
+    int dx = x-x0-rad;
+    int dy = y-y0-rad;
+
+    if(x>=0 && x < LX && y>=0 && y<LY){
+        if(dx*dx + dy*dy < rad*rad){
+            local_pot[i] = val[0];
+        }
+    }
+
+}
+
+void kernel set_local_pot_rect(__global float2 *hops, __global float *pot, __global float *val, __global float *SCALE){
+
+    int x = get_global_id(0);
+    int y = get_global_id(1);
+    int i = y*LX + x;
     int j5 = NHOPS*i;
-    float t = val[0]/SCALE[0];
 
-    hops[j5+0] = (float2)(t, 0.0); // Local potential
+    float v = val[0]/SCALE[0];
+    hops[j5] = (float2)(v, 0.0); // Local potential
+    pot[i] = val[0];
+
 }
 
-void kernel clear_local_pot(__global float2 *hops){
+void kernel set_local_B(__global float *mag, __global float *val){
+
+    int x = get_global_id(0);
+    int y = get_global_id(1);
+    int L = LX + 2*PAD;
+    int i = y*L + x;
+
+    // Get the radius, assumes that the global sizes have the same dimension
+    int rad = get_global_size(0)/2;
+
+    int x0 = get_global_offset(0);
+    int y0 = get_global_offset(1);
+    int dx = x-x0-rad;
+    int dy = y-y0-rad;
+
+    float frac = (dx*dx + dy*dy)*1.0/(rad*rad);
+    //float attenuation = exp(-frac*frac*2);
+    float attenuation = exp(-frac*2);
+    float dm = val[0]*attenuation;
+    //attenuation = 1;
+    float max_mag = val[0]*4;
+
+
+    if(x>=0 && x < LX && y>=0 && y<LY && frac < 1){
+        if(mag[i]+dm > max_mag){
+            mag[i] = max_mag;
+        } else {
+            mag[i] += dm;
+        }
+    }
+
+}
+
+void kernel clear_local_pot(__global float2 *hops, __global float *pot){
     int i = get_global_id(1)*LX + get_global_id(0);
     int j5 = NHOPS*i;
     hops[j5] = (float2)(0.0, 0.0); // Local potential
+    pot[i] = 0;
 }
+
 
 void kernel cheb2(__global float2 *input, __global float2 *output, __global float2 *hops, __global float2 *acc, __global float2 *jn){
 
@@ -83,17 +176,75 @@ void kernel colormap(__global float2 *acc, __global int4 *pix, __global float *m
     int i = get_global_id(1)*L + get_global_id(0);
 
     //int value = (int)(255*(acc[i].x/max));
-    int value = (int)(255*(acc[i].x*acc[i].x + acc[i].y*acc[i].y)/m);
+    int value = (int)(255*(acc[i].x*acc[i].x + acc[i].y*acc[i].y)/m/m);
+    int valueo2 = value/2;
+    int valueo3 = value/3;
+    if(value>255) value=255;
+    if(valueo2>255) valueo2=255;
+    if(valueo3>255) valueo3=255;
 
     //printf("max %f\n", m);
     //printf("%d %d %d %d %d\n", get_global_id(0) ,get_global_id(1), i, j, value);
     //printf("%d %d %d %d %f %f %d\n", get_global_id(0) ,get_global_id(1), i, j, acc[i].x, acc[i].y, value);
     //int value = 0;
-    pix[j].x = value/2; // B
+    pix[j].x = valueo2; // B
     pix[j].y = value;   // G
-    pix[j].z = value/3; // R
+    pix[j].z = valueo3; // R
     pix[j].w = 0;       // A
 }
+
+void kernel colormapV(__global float *pot, __global int4 *pix){
+    //float m = max[0];
+    //int L = LX + 2*PAD;
+    //int j = (get_global_id(1)-PAD)*LX + (get_global_id(0)-PAD);
+    //int i = get_global_id(1)*L + get_global_id(0);
+
+
+//void kernel set_sq(__global float2 *hops, __global float *scale){
+
+    //int l = lx + 2*pad;
+    //int j = (get_global_id(1)-pad)*l + (get_global_id(0)-pad);
+    int i = get_global_id(1)*LX + get_global_id(0);
+    //int j5 = NHOPS*i;
+    //float t = -1.0/scale[0];
+
+    //hops[j5+0] = (float2)(0.0, 0.0); // local potential
+
+
+
+    //int value = (int)(255*(acc[i].x/max));
+    float max=8.0;
+    int value = (int)(255*pot[i]/max);
+
+    //printf("max %f\n", m);
+    //printf("%d %d %d %d %d\n", get_global_id(0) ,get_global_id(1), i, j, value);
+    //printf("%d %d %d %d %f %f %d\n", get_global_id(0) ,get_global_id(1), i, j, acc[i].x, acc[i].y, value);
+    //int value = 0;
+    pix[i].x = value; // B
+    pix[i].y = 0;   // G
+    pix[i].z = 0; // R
+    pix[i].w = 0;       // A
+}
+
+
+
+void kernel colormapB(__global float *mag, __global int4 *pix){
+    int L = LX + 2*PAD;
+    int x = get_global_id(0);
+    int y = get_global_id(1);
+
+    int i = y*LX + x;
+    int j = (y+PAD)*L + (x+PAD);
+
+    float max=0.005*4*2;
+    int value = (int)(255*mag[j]/max);
+
+    pix[i].x = 0; // B
+    pix[i].y = 0;   // G
+    pix[i].z = value; // R
+    pix[i].w = 0;       // A
+}
+
 
 void kernel absorb(__global float2 *array, __global float *score){
     int L = LX + 2*PAD;

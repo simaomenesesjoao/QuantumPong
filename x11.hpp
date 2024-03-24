@@ -6,12 +6,16 @@ class x11{
     Window root;
     Window window;
     XEvent event;
+    
+    float transp;
 
     XImage *image;
-    unsigned width, height;
+    int width, height;
+    GC gc;
 
     void finish();
     void update();
+    void set_victory_screen(int);
     void init(unsigned, unsigned);
 
 };

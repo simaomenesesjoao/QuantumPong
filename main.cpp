@@ -1,3 +1,4 @@
+#define CL_HPP_TARGET_OPENCL_VERSION 210
 #include <iostream>
 #include <fstream>
 #include <chrono>
@@ -14,29 +15,29 @@ void handleEvent(x11 *vis, kpm *eng) {
     float ky = 1.0;
     float broad = 20.0;
 
-    unsigned paddle_x = 100;
-    unsigned paddle_y_bot = 50;
-    unsigned paddle_y_top = eng->Ly-50;
-    unsigned paddle_width = 100;
-    unsigned paddle_height = 20;
+    int paddle_x = 100;
+    int paddle_y_bot = 50;
+    int paddle_y_top = eng->Ly-50;
+    int paddle_width = 100;
+    int paddle_height = 20;
 
-    float current_max;
+    int d = 20;
     KeyCode keyCode;
-    unsigned xt, xb, yt, yb;
+    int xt, xb, yt, yb;
     uint32_t KeyEventCode;
     while (XPending(vis->display) > 0){
-        std::cout << "inside loop " << "\n";
+        //std::cout << "inside loop " << "\n";
         XEvent event;
         XNextEvent(vis->display, &event);
 
-        std::cout << "event type: " << event.type << "\n";
+        //std::cout << "event type: " << event.type << "\n";
         switch (event.type) {
             case KeyPress:
                 // Handle key press event
                 keyCode = event.xkey.keycode;
                 KeyEventCode = keyCode; 
 
-                std::cout << KeyEventCode << "\n"; 
+                //std::cout << KeyEventCode << "\n"; 
                 xt = eng->top_player_x;
                 yt = eng->top_player_y;
                 xb = eng->bot_player_x;
@@ -44,60 +45,92 @@ void handleEvent(x11 *vis, kpm *eng) {
 
                 // Update player on top
                 switch(KeyEventCode){
+                    case 19:
+                        //std::cout << "0: win bot\n";
+                        eng->win = true;
+                        break;
+
                     case 25:
-                        std::cout << "W\n";
-                        eng->update_paddles(xt, yt-10, xb, yb);
+                        //std::cout << "W\n";
+                        eng->update_paddles(xt, yt-d, xb, yb);
                         break;
                     case 38:
-                        std::cout << "A\n";
-                        eng->update_paddles(xt-10, yt, xb, yb);
+                        //std::cout << "A\n";
+                        eng->update_paddles(xt-d, yt, xb, yb);
                         break;
                     case 39:
-                        std::cout << "S\n";
-                        eng->update_paddles(xt, yt+10, xb, yb);
+                        //std::cout << "S\n";
+                        eng->update_paddles(xt, yt+d, xb, yb);
                         break;
                     case 40:
-                        std::cout << "D\n";
-                        eng->update_paddles(xt+10, yt, xb, yb);
+                        //std::cout << "D\n";
+                        eng->update_paddles(xt+d, yt, xb, yb);
                         break;
 
                     case 31:
-                        std::cout << "I\n";
-                        eng->update_paddles(xt, yt, xb, yb-10);
+                        //std::cout << "I\n";
+                        eng->update_paddles(xt, yt, xb, yb-d);
                         break;
                     case 44:
-                        std::cout << "J\n";
-                        eng->update_paddles(xt, yt, xb-10, yb);
+                        //std::cout << "J\n";
+                        eng->update_paddles(xt, yt, xb-d, yb);
                         break;
                     case 45:
-                        std::cout << "K\n";
-                        eng->update_paddles(xt, yt, xb, yb+10);
+                        //std::cout << "K\n";
+                        eng->update_paddles(xt, yt, xb, yb+d);
                         break;
                     case 46:
-                        std::cout << "L\n";
-                        eng->update_paddles(xt, yt, xb+10, yb);
+                        //std::cout << "L\n";
+                        eng->update_paddles(xt, yt, xb+d, yb);
+                        break;
+
+                    case 28:
+                        std::cout << "T: absorption and scoring disabled\n";
+                        eng->absorb_on = false;
+                        break;
+
+                    case 29:
+                        std::cout << "Y: absorption and scoring enabled\n";
+                        eng->absorb_on = true;
                         break;
 
                     // Change norm
                     case 10:
-                        current_max = eng->max;
-                        eng->set_max(current_max/2);
-                        std::cout << "current max: " << current_max << "\n";
+                        eng->modifier *= 1.5;
+                        std::cout << "current modifier: " << eng->modifier << "\n";
                         break;
                     case 11:
-                        current_max = eng->max;
-                        eng->set_max(current_max*2);
-                        std::cout << "current max: " << current_max << "\n";
+                        eng->modifier /= 1.5;
+                        std::cout << "current modifier: " << eng->modifier << "\n";
+                        break;
+                    case 12:
+                        eng->radB *= 1.5;
+                        std::cout << "3: Increasing B radius. Current B radius: " << eng->radB << "\n";
+                        break;
+                    case 13:
+                        eng->radB /= 1.5;
+                        std::cout << "4: Decreasing B radius. Current B radius: " << eng->radB << "\n";
+                        break;
+
+                    case 41:
+                        eng->running = true;
+                        std::cout << "F: running" << "\n";
+                        break;
+                    case 42:
+                        eng->running = false;
+                        std::cout << "G: stopping" << "\n";
                         break;
 
                     // reset
                     case 27:
-                        std::cout << "reset" << current_max << "\n";
+                        std::cout << "R: restart" << "\n";
+                        eng->reset_state();
                         eng->set_H();
                         eng->initialize_wf(ix, iy, kx, ky, broad);
-                        eng->reset_state();
                         eng->init_paddles(paddle_x, paddle_y_top, paddle_x, paddle_y_bot, paddle_width, paddle_height);
                         eng->update_paddles(paddle_x, paddle_y_top, paddle_x, paddle_y_bot);
+
+                        eng->win = false;
 
 
                         break;
@@ -105,7 +138,7 @@ void handleEvent(x11 *vis, kpm *eng) {
                 break;
 
             case ButtonPress:
-                std::cout << "Button pressed\n";
+                //std::cout << "Button pressed\n";
                 if (event.xbutton.button == Button1) {
                     int mouseX = event.xbutton.x;
                     int mouseY = event.xbutton.y;
@@ -113,6 +146,14 @@ void handleEvent(x11 *vis, kpm *eng) {
                     float v = 4.0;
                     std::cout << "Left mouse button press at X = " << mouseX << ", Y = " << mouseY << std::endl;
                     eng->set_local_pot(mouseX, mouseY, w, w, v);
+                }
+
+                if (event.xbutton.button == Button3) {
+                    int mouseX = event.xbutton.x;
+                    int mouseY = event.xbutton.y;
+                    float v = 0.005;
+                    std::cout << "Right mouse button press at X = " << mouseX << ", Y = " << mouseY << std::endl;
+                    eng->set_local_B(mouseX, mouseY, v);
                 }
 
                 break;
@@ -132,7 +173,7 @@ int main(int argc, char** argv){
     unsigned Ncheb = 10;
 
     unsigned height = Ly;
-    unsigned width = Lx;
+    unsigned width = Lx + 30;
 
     // initial wavefunction parameters: center, momentum, spread
     unsigned ix = Lx/2;
@@ -146,7 +187,7 @@ int main(int argc, char** argv){
     kpm engine;
     engine.init_cl();
     engine.init_geometry(Lx, Ly, pad, local);
-    engine.init_window(width, height);
+    engine.init_window(Lx, Ly);
     engine.set_hamiltonian_sq();
     engine.init_buffers();
     engine.init_kernels();
@@ -164,30 +205,38 @@ int main(int argc, char** argv){
 
     x11 visual;
     visual.init(width, height);
-    float norm, max;
-    norm = 0;
+    float max, threshhold;
     max = 0;
+    threshhold = 0;
 
     for(unsigned j=0; j<Ntimes; j++){
         handleEvent(&visual, &engine);
-        engine.update_pixel(visual.image->data);
-        norm = engine.get_norm(&max);
+        engine.get_norm(&max, &threshhold);
+
 
         if(engine.norm_top > 0.5){
-            std::cout << "Bottom player won! Press R to reset.\n";
-            usleep(1000000);
-        } else if(engine.norm_bot > 0.5){
-            std::cout << "Top player won! Press R to reset.\n";
-            usleep(1000000);
-        } else {
-            engine.iterate_time(2);
-        }
-        engine.absorb();
+        //if(engine.norm_top > 0.5 || engine.win){
+            usleep(100000);
+            visual.set_victory_screen(0);
+            if(j%10==0) std::cout << "Top player won! Press R to reset.\n";
 
-        if(j%10==0){
-            std::cout << "time, norm, max, norm_top, norm_bot: " << j << " " << norm << " " << max << " " << engine.norm_top << " " << engine.norm_bot << "\n";
+        } else if(engine.norm_bot > 0.5){
+        //} else if(engine.norm_bot > 0.5 || engine.win){
+            usleep(100000);
+            visual.set_victory_screen(1);
+            if(j%10==0) std::cout << "Bottom player won! Press R to reset.\n";
+        } else {
+            
+            engine.set_max(threshhold);
+            engine.update_pixel(visual.image->data, visual.width, visual.height);
+            if(engine.running) engine.iterate_time(3);
+            if(engine.absorb_on) engine.absorb();
         }
+
         visual.update();
+        //if(j%10==0){
+            //std::cout << "time, norm, max, norm_top, norm_bot: " << j << " " << norm << " " << max << " " << engine.norm_top << " " << engine.norm_bot << "\n";
+        //}
         //usleep(50000);
     }
 
