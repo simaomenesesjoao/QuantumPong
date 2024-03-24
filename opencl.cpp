@@ -300,6 +300,8 @@ void kpm::update_paddles(int pt_x, int pt_y, int pb_x, int pb_y){
     if(pb_y <    paddle_height/2) bot_player_y =    paddle_height/2; 
     if(pb_y > Ly-paddle_height/2) bot_player_y = Ly-paddle_height/2;
 
+    std::cout << pb_x << " " << pb_y << " " << pt_x << " " << pt_y << "\n";
+    std::cout << bot_player_x << " " << bot_player_y << " " << top_player_x << " " << top_player_y << "\n";
 
     global_size = cl::NDRange{(cl::size_type)paddle_width, (cl::size_type)paddle_height};
     local_size  = cl::NDRange{(cl::size_type)local, (cl::size_type)local};
@@ -679,8 +681,8 @@ void kpm::update_pixel(char *data, unsigned vis_width, unsigned vis_height){
 
 
     // Draw the paddles
-    for(int i=top_player_x-paddle_width/2; i<=top_player_x+paddle_width/2; i++){
-        for(int j=top_player_y-paddle_height/2; j<=top_player_y+paddle_height/2; j++){
+    for(int i=top_player_x-paddle_width/2; i<top_player_x+paddle_width/2; i++){
+        for(int j=top_player_y-paddle_height/2; j<top_player_y+paddle_height/2; j++){
             m = j*vis_width + i;
             data[4*m+0] = 0;
             data[4*m+1] += 122;
@@ -689,8 +691,8 @@ void kpm::update_pixel(char *data, unsigned vis_width, unsigned vis_height){
         }
     }
 
-    for(int i=bot_player_x-paddle_width/2; i<=bot_player_x+paddle_width/2; i++){
-        for(int j=bot_player_y-paddle_height/2; j<=bot_player_y+paddle_height/2; j++){
+    for(int i=bot_player_x-paddle_width/2; i<bot_player_x+paddle_width/2; i++){
+        for(int j=bot_player_y-paddle_height/2; j<bot_player_y+paddle_height/2; j++){
             m = j*vis_width + i;
             data[4*m+0] = 255;
             data[4*m+1] += 122;
