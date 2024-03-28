@@ -15,11 +15,7 @@ This is a preliminary version of the game and requires OpenCL GPU acceleration t
 This game is simulated on a discretized version of the Schrodinger equation in 2D space. The equation is solved by computing the time evolution operator with a Chebyshev decomposition.
 
 ## Wish list
-Support for more platforms
-OpenCL/OpenGL integration
-Make it event driven
-Make the window dimensions independent of the simulation dimensions
-Better visualization of the objects on the screen
-Implement magnetic fields, electric fields, optical fields
-
-
+Support for more platforms<br>
+OpenCL/OpenGL integration<br>
+Make it event driven<br>
+Make the window dimensions independent of the simulation dimensions<br>
