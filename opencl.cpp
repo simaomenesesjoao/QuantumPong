@@ -118,6 +118,7 @@ void kpm::init_buffers(){
 
 
 
+
 void kpm::init_kernels(){
     if(!geometry_init){
         std::cout << "Geometry must be initialized before kernels are compiled. Exiting.\n";
@@ -300,8 +301,8 @@ void kpm::update_paddles(int pt_x, int pt_y, int pb_x, int pb_y){
     if(pb_y <    paddle_height/2) bot_player_y =    paddle_height/2; 
     if(pb_y > Ly-paddle_height/2) bot_player_y = Ly-paddle_height/2;
 
-    std::cout << pb_x << " " << pb_y << " " << pt_x << " " << pt_y << "\n";
-    std::cout << bot_player_x << " " << bot_player_y << " " << top_player_x << " " << top_player_y << "\n";
+    //std::cout << pb_x << " " << pb_y << " " << pt_x << " " << pt_y << "\n";
+    //std::cout << bot_player_x << " " << bot_player_y << " " << top_player_x << " " << top_player_y << "\n";
 
     global_size = cl::NDRange{(cl::size_type)paddle_width, (cl::size_type)paddle_height};
     local_size  = cl::NDRange{(cl::size_type)local, (cl::size_type)local};
@@ -376,6 +377,36 @@ void kpm::set_local_pot(unsigned x, unsigned y, unsigned dx, unsigned dy, float 
     local_size  = cl::NDRange{(cl::size_type)(local), (cl::size_type)(local)};
     queue.enqueueNDRangeKernel(set_sq_B, offset, global_size, local_size);
 }
+
+void kpm::initialize_pot_from(){
+    // Initialize container to zeros
+    float *text_pot = new float[N];
+    for(int i=0; i<N; i++) text_pot[i] = 0;
+
+    std::ifstream inputFile("other/qp_pot.txt");
+    int num;
+    int ncols = 350;
+    int nrows = 200;
+    int n;
+    int offset_c = 30;
+    int offset_r = 200;
+    std::cout << "before loop\n" << std::flush;
+    for(int r=0; r<nrows; r++){
+        for(int c=0; c<ncols; c++){
+            n = c+offset_c + Lx*(r+offset_r);
+            inputFile >> num;
+            text_pot[n] = -(float)num*4;
+        }
+    }
+    std::cout << "after loop\n" << std::flush;
+    queue.enqueueWriteBuffer(pot_buf,   CL_TRUE, 0, sizeof(float)*N, text_pot);
+    delete[] text_pot;
+
+    offset      = cl::NDRange{(cl::size_type)(0), (cl::size_type)(0)};
+    global_size = cl::NDRange{(cl::size_type)(Lx), (cl::size_type)(Ly)};
+    local_size  = cl::NDRange{(cl::size_type)(local), (cl::size_type)(local)};
+    queue.enqueueNDRangeKernel(set_sq_B, offset, global_size, local_size);
+};
 
 void kpm::reset_state(){
 
@@ -668,8 +699,7 @@ void kpm::update_pixel(char *data, unsigned vis_width, unsigned vis_height){
     queue.enqueueNDRangeKernel(colormapV,  offset, global_size, local_size);
     queue.enqueueReadBuffer(   pix_buf, CL_TRUE, 0, sizeof(int4)*Npixels, array);
 
-    // Plot the wavefunction
-    //unsigned m;
+    // Plot the potential
     for(int r = 0; r < Ly; r++){
         for(int c = 0; c < Lx; c++){
             m = r*vis_width + c;
@@ -687,7 +717,7 @@ void kpm::update_pixel(char *data, unsigned vis_width, unsigned vis_height){
             data[4*m+0] = 0;
             data[4*m+1] += 122;
             data[4*m+2] = 255;
-            //data[4*m+3] = array[m].w;
+
         }
     }
 
@@ -697,7 +727,6 @@ void kpm::update_pixel(char *data, unsigned vis_width, unsigned vis_height){
             data[4*m+0] = 255;
             data[4*m+1] += 122;
             data[4*m+2] = 0;
-            //data[4*m+3] = array[m].w;
         }
     }
 

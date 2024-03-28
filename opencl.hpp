@@ -57,6 +57,7 @@ class kpm {
     void set_local_pot(unsigned, unsigned, unsigned, unsigned, float);
     void set_local_B(unsigned, unsigned, float);
 
+    void initialize_pot_from();
     void init_kernels();
     void init_buffers();
 

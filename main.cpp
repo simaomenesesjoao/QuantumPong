@@ -163,6 +163,10 @@ void handleEvent(x11 *vis, kpm *eng) {
 
 int main(int argc, char** argv){
 
+
+
+
+
     unsigned Lx = 400;
     unsigned Ly = 700;
     unsigned pad = 1;
@@ -182,7 +186,19 @@ int main(int argc, char** argv){
     float ky = 1.0;
     float broad = 20.0;
 
-    unsigned Ntimes = 20000;
+    //unsigned ix = 50;
+    //unsigned iy = 500;
+    //float kx = -0.07;
+    //float ky = 0.3;
+    //float broad = 60.0;
+    
+    //unsigned ix = 120;
+    //unsigned iy = 500;
+    //float kx = 0.1;
+    //float ky = 0.4;
+    //float broad = 20.0;
+
+    unsigned Ntimes = 200000;
 
     kpm engine;
     engine.init_cl();
@@ -193,6 +209,7 @@ int main(int argc, char** argv){
     engine.init_kernels();
     engine.initialize_tevop(dt, Ncheb);
     engine.set_H();
+    //engine.initialize_pot_from();
     engine.initialize_wf(ix, iy, kx, ky, broad);
 
     unsigned paddle_x = 100;
