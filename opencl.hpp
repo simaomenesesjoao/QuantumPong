@@ -4,6 +4,7 @@ typedef cl_int4 int4;
 
 class kpm {
     public:
+    bool showcase, pressed_showcase;
     //private:
     std::vector<cl::Platform> platforms;
     cl::Platform platform;
@@ -58,6 +59,7 @@ class kpm {
     void set_local_B(unsigned, unsigned, float);
 
     void initialize_pot_from();
+    void clear_wf_away_from_pot(char*, unsigned, unsigned);
     void init_kernels();
     void init_buffers();
 

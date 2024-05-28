@@ -8,6 +8,11 @@
 #include "opencl.hpp"
 
 void kpm::init_cl(){
+    // If showcase is true, then several behaviours change, for cinematic reasons
+    showcase = false;
+    pressed_showcase = false;
+
+
     // Get the platforms
     cl::Platform::get(&platforms);
     if(platforms.size() == 0){
@@ -406,7 +411,47 @@ void kpm::initialize_pot_from(){
     global_size = cl::NDRange{(cl::size_type)(Lx), (cl::size_type)(Ly)};
     local_size  = cl::NDRange{(cl::size_type)(local), (cl::size_type)(local)};
     queue.enqueueNDRangeKernel(set_sq_B, offset, global_size, local_size);
+    inputFile.close();
 };
+
+
+void kpm::clear_wf_away_from_pot(char *data, unsigned vis_width, unsigned vis_height){
+    // Initialize container to zeros
+    float *text_pot = new float[N];
+    for(int i=0; i<N; i++) text_pot[i] = 0;
+
+    std::ifstream inputFile("other/qp_pot.txt");
+    int num;
+    int ncols = 350;
+    int nrows = 200;
+    int n;
+    int offset_c = 30;
+    int offset_r = 200;
+    for(int r=0; r<nrows; r++){
+        for(int c=0; c<ncols; c++){
+            n = c+offset_c + Lx*(r+offset_r);
+            inputFile >> num;
+            text_pot[n] = (float)num;
+        }
+    }
+    inputFile.close();
+
+    int m;
+    for(int r = 0; r < Ly; r++){
+        for(int c = 0; c < Lx; c++){
+            m = r*vis_width + c;
+            n = r*Lx + c;
+            if(text_pot[n] < 0.5){
+                data[4*m+0] = 0.0;
+                data[4*m+1] = 0.0;
+                data[4*m+2] = 0.0;
+                data[4*m+3] = 0.0;
+            }
+        }
+    }
+    delete[] text_pot;
+
+}
 
 void kpm::reset_state(){
 
@@ -651,6 +696,8 @@ float kpm::get_norm(float *maximum, float *threshhold){
 
 void kpm::update_pixel(char *data, unsigned vis_width, unsigned vis_height){
 
+    // Update the pixels on the screen
+    // if showcase==true, then the potentials and the paddles wont be drawn
 
     // Get wavefunction
     offset      = cl::NDRange{(cl::size_type)(pad), (cl::size_type)(pad)};
@@ -700,6 +747,7 @@ void kpm::update_pixel(char *data, unsigned vis_width, unsigned vis_height){
     queue.enqueueReadBuffer(   pix_buf, CL_TRUE, 0, sizeof(int4)*Npixels, array);
 
     // Plot the potential
+    if(!showcase)
     for(int r = 0; r < Ly; r++){
         for(int c = 0; c < Lx; c++){
             m = r*vis_width + c;
@@ -711,6 +759,7 @@ void kpm::update_pixel(char *data, unsigned vis_width, unsigned vis_height){
 
 
     // Draw the paddles
+    if(!showcase)
     for(int i=top_player_x-paddle_width/2; i<top_player_x+paddle_width/2; i++){
         for(int j=top_player_y-paddle_height/2; j<top_player_y+paddle_height/2; j++){
             m = j*vis_width + i;
@@ -721,6 +770,7 @@ void kpm::update_pixel(char *data, unsigned vis_width, unsigned vis_height){
         }
     }
 
+    if(!showcase)
     for(int i=bot_player_x-paddle_width/2; i<bot_player_x+paddle_width/2; i++){
         for(int j=bot_player_y-paddle_height/2; j<bot_player_y+paddle_height/2; j++){
             m = j*vis_width + i;

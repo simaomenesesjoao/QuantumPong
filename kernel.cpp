@@ -194,26 +194,9 @@ void kernel colormap(__global float2 *acc, __global int4 *pix, __global float *m
 }
 
 void kernel colormapV(__global float *pot, __global int4 *pix){
-    //float m = max[0];
-    //int L = LX + 2*PAD;
-    //int j = (get_global_id(1)-PAD)*LX + (get_global_id(0)-PAD);
-    //int i = get_global_id(1)*L + get_global_id(0);
-
-
-//void kernel set_sq(__global float2 *hops, __global float *scale){
-
-    //int l = lx + 2*pad;
-    //int j = (get_global_id(1)-pad)*l + (get_global_id(0)-pad);
     int i = get_global_id(1)*LX + get_global_id(0);
-    //int j5 = NHOPS*i;
-    //float t = -1.0/scale[0];
-
-    //hops[j5+0] = (float2)(0.0, 0.0); // local potential
-
-
-
-    //int value = (int)(255*(acc[i].x/max));
-    float max=8.0;
+    float max=1.0;
+    //float max=8.0; // actual value
     int value = (int)(255*pot[i]/max);
 
     //printf("max %f\n", m);

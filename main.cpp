@@ -21,7 +21,7 @@ void handleEvent(x11 *vis, kpm *eng) {
     int paddle_width = 100;
     int paddle_height = 20;
 
-    int d = 20;
+    int d = 20; // Movement increment 
     KeyCode keyCode;
     int xt, xb, yt, yb;
     uint32_t KeyEventCode;
@@ -93,6 +93,11 @@ void handleEvent(x11 *vis, kpm *eng) {
                         std::cout << "Y: absorption and scoring enabled\n";
                         eng->absorb_on = true;
                         break;
+                        
+                    case 30:
+                        eng->pressed_showcase = !eng->pressed_showcase;
+                        std::cout << "U: Toggle wf: " << eng->pressed_showcase << "\n";
+                        break;
 
                     // Change norm
                     case 10:
@@ -143,7 +148,7 @@ void handleEvent(x11 *vis, kpm *eng) {
                     int mouseX = event.xbutton.x;
                     int mouseY = event.xbutton.y;
                     unsigned w = 70;
-                    float v = 4.0;
+                    float v = 0.9;
                     std::cout << "Left mouse button press at X = " << mouseX << ", Y = " << mouseY << std::endl;
                     eng->set_local_pot(mouseX, mouseY, w, w, v);
                 }
@@ -163,12 +168,10 @@ void handleEvent(x11 *vis, kpm *eng) {
 
 int main(int argc, char** argv){
 
-
-
-
-
     unsigned Lx = 400;
     unsigned Ly = 700;
+    //unsigned Lx = 1000;
+    //unsigned Ly = 1600;
     unsigned pad = 1;
     unsigned local = 2;
 
@@ -180,17 +183,17 @@ int main(int argc, char** argv){
     unsigned width = Lx + 30;
 
     // initial wavefunction parameters: center, momentum, spread
-    unsigned ix = Lx/2;
-    unsigned iy = Ly/2;
-    float kx = 0.5;
-    float ky = 1.0;
-    float broad = 20.0;
+    //unsigned ix = Lx/2;
+    //unsigned iy = Ly/2;
+    //float kx = 0.5;
+    //float ky = 1.0;
+    //float broad = 20.0;
 
-    //unsigned ix = 50;
-    //unsigned iy = 500;
-    //float kx = -0.07;
-    //float ky = 0.3;
-    //float broad = 60.0;
+    unsigned ix = Lx/2;
+    unsigned iy = 100;
+    float kx = 0.0;
+    float ky = -1.0;
+    float broad = 20.0;
     
     //unsigned ix = 120;
     //unsigned iy = 500;
@@ -200,8 +203,11 @@ int main(int argc, char** argv){
 
     unsigned Ntimes = 200000;
 
+    bool showcase = false;
+
     kpm engine;
     engine.init_cl();
+    engine.showcase = showcase;
     engine.init_geometry(Lx, Ly, pad, local);
     engine.init_window(Lx, Ly);
     engine.set_hamiltonian_sq();
@@ -209,7 +215,7 @@ int main(int argc, char** argv){
     engine.init_kernels();
     engine.initialize_tevop(dt, Ncheb);
     engine.set_H();
-    //engine.initialize_pot_from();
+    if(showcase) engine.initialize_pot_from();
     engine.initialize_wf(ix, iy, kx, ky, broad);
 
     unsigned paddle_x = 100;
@@ -246,6 +252,7 @@ int main(int argc, char** argv){
             
             engine.set_max(threshhold);
             engine.update_pixel(visual.image->data, visual.width, visual.height);
+            if(engine.pressed_showcase) engine.clear_wf_away_from_pot(visual.image->data, visual.width, visual.height);
             if(engine.running) engine.iterate_time(3);
             if(engine.absorb_on) engine.absorb();
         }
