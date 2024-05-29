@@ -1,13 +1,23 @@
 // The GPU device I'm using uses openCL v2.1
 #define CL_HPP_TARGET_OPENCL_VERSION 210
 
+#include <unistd.h>
 #include <complex>
 #include <fstream>
+#include <chrono>
+#include <mutex>
 #include <iostream>
-#include <algorithm> // for std::max
-#include "opencl.hpp"
+#include <CL/opencl.hpp>
+#include <algorithm>
+#include "../macros.hpp"
+#include "event_queue.hpp"
+#include "simulator.hpp"
 
-void kpm::init_cl(){
+simulator::simulator(event_queue *evq){
+    eq = evq;
+}
+
+void simulator::init_cl(){
     // If showcase is true, then several behaviours change, for cinematic reasons
     showcase = false;
     pressed_showcase = false;
@@ -40,10 +50,9 @@ void kpm::init_cl(){
 
 
     queue = cl::CommandQueue(context, device);
-};
+}
 
-
-void kpm::init_geometry(unsigned lx, unsigned ly, unsigned p, unsigned loc){
+void simulator::init_geometry(unsigned lx, unsigned ly, unsigned p, unsigned loc){
     geometry_init = true;
     Lx = lx;
     Ly = ly;
@@ -55,19 +64,18 @@ void kpm::init_geometry(unsigned lx, unsigned ly, unsigned p, unsigned loc){
 
 }
 
-
-void kpm::init_window(unsigned width, unsigned height){
+void simulator::init_window(unsigned width, unsigned height){
     window_init = true;
     Npixels = width*height;
 }
 
-void kpm::set_hamiltonian_sq(){
+void simulator::set_hamiltonian_sq(){
     Nhops = 5;
     SCALE = 4.1;
 
 }
 
-void kpm::init_buffers(){
+void simulator::init_buffers(){
     if(!geometry_init){
         std::cout << "Geometry must be initialized before buffers are initialized. Exiting.\n";
         exit(1);
@@ -118,13 +126,26 @@ void kpm::init_buffers(){
     queue.enqueueWriteBuffer(pot_buf,   CL_TRUE, 0, sizeof(float)*N, score);
     delete[] score;
 
+    buffer_size = N; 
+    buffer_f_size = N+HEADER_LEN;
+
+    buffer_f = new uint8_t[buffer_f_size];
+    buffer = buffer_f+HEADER_LEN;
+
+    buffer_f[0] = PAYLOAD_ON;
+    buffer_f[1] = EV_STREAM;
+    for(unsigned i=0; i<buffer_size; i++){
+        buffer[i] = 0;
+    }
+    
 
 }
 
+void simulator::finalize(){
+    delete[] buffer_f;
+}
 
-
-
-void kpm::init_kernels(){
+void simulator::init_kernels(){
     if(!geometry_init){
         std::cout << "Geometry must be initialized before kernels are compiled. Exiting.\n";
         exit(1);
@@ -258,7 +279,7 @@ void kpm::init_kernels(){
 
 }
 
-void kpm::init_paddles(float pt_x, float pt_y, float pb_x, float pb_y, float paddle_w, float paddle_h){
+void simulator::init_paddles(float pt_x, float pt_y, float pb_x, float pb_y, float paddle_w, float paddle_h){
     top_player_x = pt_x;
     top_player_prev_x = pt_x;
     bot_player_x = pb_x;
@@ -273,7 +294,7 @@ void kpm::init_paddles(float pt_x, float pt_y, float pb_x, float pb_y, float pad
     paddle_height = paddle_h;
 }
 
-void kpm::update_paddles(int pt_x, int pt_y, int pb_x, int pb_y){
+void simulator::update_paddles(int pt_x, int pt_y, int pb_x, int pb_y){
     // Update the values of the paddle position
 
     if(pb_x < 0) pb_x = 0;
@@ -344,7 +365,7 @@ void kpm::update_paddles(int pt_x, int pt_y, int pb_x, int pb_y){
 
 }
 
-void kpm::set_local_B(unsigned x, unsigned y, float v){
+void simulator::set_local_B(unsigned x, unsigned y, float v){
     valB = v;
 
     if(radB > 2*Ly+2*Lx) radB = 2*Ly+2*Lx;
@@ -367,7 +388,7 @@ void kpm::set_local_B(unsigned x, unsigned y, float v){
     queue.enqueueNDRangeKernel(set_sq_B, offset, global_size, local_size);
 }
 
-void kpm::set_local_pot(unsigned x, unsigned y, unsigned dx, unsigned dy, float v){
+void simulator::set_local_pot(unsigned x, unsigned y, unsigned dx, unsigned dy, float v){
     val = v;
 
     queue.enqueueWriteBuffer(val_buf,   CL_TRUE, 0, sizeof(float), &val);
@@ -383,7 +404,7 @@ void kpm::set_local_pot(unsigned x, unsigned y, unsigned dx, unsigned dy, float 
     queue.enqueueNDRangeKernel(set_sq_B, offset, global_size, local_size);
 }
 
-void kpm::initialize_pot_from(){
+void simulator::initialize_pot_from(){
     // Initialize container to zeros
     float *text_pot = new float[N];
     for(int i=0; i<N; i++) text_pot[i] = 0;
@@ -412,10 +433,9 @@ void kpm::initialize_pot_from(){
     local_size  = cl::NDRange{(cl::size_type)(local), (cl::size_type)(local)};
     queue.enqueueNDRangeKernel(set_sq_B, offset, global_size, local_size);
     inputFile.close();
-};
+}
 
-
-void kpm::clear_wf_away_from_pot(char *data, unsigned vis_width, unsigned vis_height){
+void simulator::clear_wf_away_from_pot(char *data, unsigned vis_width, unsigned vis_height){
     // Initialize container to zeros
     float *text_pot = new float[N];
     for(int i=0; i<N; i++) text_pot[i] = 0;
@@ -453,7 +473,7 @@ void kpm::clear_wf_away_from_pot(char *data, unsigned vis_width, unsigned vis_he
 
 }
 
-void kpm::reset_state(){
+void simulator::reset_state(){
 
     // Initialize score to zero
     float  *score = new float[Ncells];
@@ -472,7 +492,7 @@ void kpm::reset_state(){
 
 }
 
-void kpm::set_H(){//float d, int length, int width){
+void simulator::set_H(){//float d, int length, int width){
     // d, length, width is for the potential, to be implemented later
     //queue.enqueueWriteBuffer(  hops_buf, CL_TRUE, 0, sizeof(float2)*Nhops*WIDTH*WIDTH, hops);
 
@@ -484,8 +504,7 @@ void kpm::set_H(){//float d, int length, int width){
     queue.enqueueNDRangeKernel(set_sq_B, offset, global_size, local_size);
 }
 
-
-void kpm::initialize_wf(unsigned i0, unsigned j0, float kx, float ky, float broad){
+void simulator::initialize_wf(unsigned i0, unsigned j0, float kx, float ky, float broad){
 
     //std::cout << "N:" << N << "\n";
     float2  *input = new float2[Ncells];
@@ -539,7 +558,7 @@ void kpm::initialize_wf(unsigned i0, unsigned j0, float kx, float ky, float broa
     delete[] input;
 }
 
-void kpm::initialize_tevop(float dt, unsigned Npolys){
+void simulator::initialize_tevop(float dt, unsigned Npolys){
     // Determines the coefficients for the Chebyshev expansion of the time
     // evolution operator, and pushes them to the GPU
     Ncheb = Npolys; // Make sure this is an even number
@@ -572,8 +591,7 @@ void kpm::initialize_tevop(float dt, unsigned Npolys){
 
 }
 
-
-void kpm::iterate_time(unsigned niters){
+void simulator::iterate_time(unsigned niters){
 
     for(unsigned n=0; n<niters; n++){
         // Pairs of chebs
@@ -607,12 +625,12 @@ void kpm::iterate_time(unsigned niters){
     }
 }
 
-void kpm::set_max(float m){
+void simulator::set_max(float m){
     max = m;
     queue.enqueueWriteBuffer(max_buf, CL_TRUE, 0, sizeof(float), &max);
 }
 
-float kpm::get_norm(float *maximum, float *threshhold){
+float simulator::get_norm(float *maximum, float *threshhold){
     float2 *wavef = new float2[Ncells]; // input
     float  *score = new float[Ncells]; // score
     queue.enqueueReadBuffer(input_buf, CL_TRUE, 0, sizeof(float2)*Ncells, wavef);
@@ -693,8 +711,7 @@ float kpm::get_norm(float *maximum, float *threshhold){
     return norm2;
 }
 
-
-void kpm::update_pixel(char *data, unsigned vis_width, unsigned vis_height){
+void simulator::update_pixel(){
 
     // Update the pixels on the screen
     // if showcase==true, then the potentials and the paddles wont be drawn
@@ -713,128 +730,128 @@ void kpm::update_pixel(char *data, unsigned vis_width, unsigned vis_height){
     int m, n;
     for(int r = 0; r < Ly; r++){
         for(int c = 0; c < Lx; c++){
-            m = r*vis_width + c;
+            m = r*Lx + c;
             n = r*Lx + c;
-            data[4*m+0] = array[n].x;
-            data[4*m+1] = array[n].y;
-            data[4*m+2] = array[n].z;
-            data[4*m+3] = array[n].w;
+            // buffer[4*m+0] = array[n].x;
+            buffer[m] = array[n].y;
+            // buffer[4*m+2] = array[n].z;
+            // buffer[4*m+3] = array[n].w;
         }
     }
 
     // Get magnetic field
-    queue.enqueueNDRangeKernel(colormapB,  offset, global_size, local_size);
-    queue.enqueueReadBuffer(   pix_buf, CL_TRUE, 0, sizeof(int4)*Npixels, array);
+    // queue.enqueueNDRangeKernel(colormapB,  offset, global_size, local_size);
+    // queue.enqueueReadBuffer(   pix_buf, CL_TRUE, 0, sizeof(int4)*Npixels, array);
 
-    for(int r = 0; r < Ly; r++){
-        for(int c = 0; c < Lx; c++){
-            m = r*vis_width + c;
-            n = r*Lx + c;
-            data[4*m+2] = std::min(255, data[4*m+2] + array[n].z); // Edit the red channel
-        }
-    }
+    // for(int r = 0; r < Ly; r++){
+    //     for(int c = 0; c < Lx; c++){
+    //         m = r*vis_width + c;
+    //         n = r*Lx + c;
+    //         data[4*m+2] = std::min(255, data[4*m+2] + array[n].z); // Edit the red channel
+    //     }
+    // }
 
 
 
 
 
     // Get local potential
-    offset      = cl::NDRange{(cl::size_type)(0), (cl::size_type)(0)};
-    global_size = cl::NDRange{(cl::size_type)(Lx), (cl::size_type)(Ly)};
-    local_size  = cl::NDRange{(cl::size_type)(local), (cl::size_type)(local)};
+    // offset      = cl::NDRange{(cl::size_type)(0), (cl::size_type)(0)};
+    // global_size = cl::NDRange{(cl::size_type)(Lx), (cl::size_type)(Ly)};
+    // local_size  = cl::NDRange{(cl::size_type)(local), (cl::size_type)(local)};
 
-    queue.enqueueNDRangeKernel(colormapV,  offset, global_size, local_size);
-    queue.enqueueReadBuffer(   pix_buf, CL_TRUE, 0, sizeof(int4)*Npixels, array);
+    // queue.enqueueNDRangeKernel(colormapV,  offset, global_size, local_size);
+    // queue.enqueueReadBuffer(   pix_buf, CL_TRUE, 0, sizeof(int4)*Npixels, array);
 
-    // Plot the potential
-    if(!showcase)
-    for(int r = 0; r < Ly; r++){
-        for(int c = 0; c < Lx; c++){
-            m = r*vis_width + c;
-            n = r*Lx + c;
-            data[4*m+0] = std::min(255, data[4*m+0] + array[n].x);
-        }
-    }
+    // // Plot the potential
+    // if(!showcase)
+    // for(int r = 0; r < Ly; r++){
+    //     for(int c = 0; c < Lx; c++){
+    //         m = r*vis_width + c;
+    //         n = r*Lx + c;
+    //         data[4*m+0] = std::min(255, data[4*m+0] + array[n].x);
+    //     }
+    // }
     delete[] array;
 
 
-    // Draw the paddles
-    if(!showcase)
-    for(int i=top_player_x-paddle_width/2; i<top_player_x+paddle_width/2; i++){
-        for(int j=top_player_y-paddle_height/2; j<top_player_y+paddle_height/2; j++){
-            m = j*vis_width + i;
-            data[4*m+0] = 0;
-            data[4*m+1] += 122;
-            data[4*m+2] = 255;
+    // // Draw the paddles
+    // if(!showcase)
+    // for(int i=top_player_x-paddle_width/2; i<top_player_x+paddle_width/2; i++){
+    //     for(int j=top_player_y-paddle_height/2; j<top_player_y+paddle_height/2; j++){
+    //         m = j*vis_width + i;
+    //         data[4*m+0] = 0;
+    //         data[4*m+1] += 122;
+    //         data[4*m+2] = 255;
 
-        }
-    }
+    //     }
+    // }
 
-    if(!showcase)
-    for(int i=bot_player_x-paddle_width/2; i<bot_player_x+paddle_width/2; i++){
-        for(int j=bot_player_y-paddle_height/2; j<bot_player_y+paddle_height/2; j++){
-            m = j*vis_width + i;
-            data[4*m+0] = 255;
-            data[4*m+1] += 122;
-            data[4*m+2] = 0;
-        }
-    }
-
-
-    int pixels_top = (int)(norm_top*Ly);
-    int pixels_bot = (int)(norm_bot*Ly);
+    // if(!showcase)
+    // for(int i=bot_player_x-paddle_width/2; i<bot_player_x+paddle_width/2; i++){
+    //     for(int j=bot_player_y-paddle_height/2; j<bot_player_y+paddle_height/2; j++){
+    //         m = j*vis_width + i;
+    //         data[4*m+0] = 255;
+    //         data[4*m+1] += 122;
+    //         data[4*m+2] = 0;
+    //     }
+    // }
 
 
-    // Clean p
-    for(int c = Lx; c < Lx + 30; c++){
-        for(int r = 0; r < Ly; r++){
-            m = r*vis_width + c;
-            data[4*m+0] = 50;
-            data[4*m+1] = 50;
-            data[4*m+2] = 50;
-            data[4*m+3] = 0;
-        }
-    }
-
-    for(int c = Lx; c < Lx + 30; c++){
-        for(int r = 0; r < pixels_bot; r++){
-            m = r*vis_width + c;
-            data[4*m+0] = 255;
-            data[4*m+1] = 122;
-            data[4*m+2] = 0;
-            data[4*m+3] = 0;
-        }
-
-        for(int r = Ly-pixels_top; r < Ly; r++){
-            m = r*vis_width + c;
-            n = r*Lx + c;
-            data[4*m+0] = 0;
-            data[4*m+1] = 122;
-            data[4*m+2] = 255;
-            data[4*m+3] = 0;
-        }
-
-        m = Ly/2*vis_width + c;
-        data[4*m+0] = 255;
-        data[4*m+1] = 255;
-        data[4*m+2] = 255;
-        data[4*m+3] = 0;
-    }
+    // int pixels_top = (int)(norm_top*Ly);
+    // int pixels_bot = (int)(norm_bot*Ly);
 
 
-    for(int r = 0; r < Ly; r++){
-        for(int c = 0; c < Lx; c++){
-            m = r*vis_width + c;
+    // // Clean p
+    // for(int c = Lx; c < Lx + 30; c++){
+    //     for(int r = 0; r < Ly; r++){
+    //         m = r*vis_width + c;
+    //         data[4*m+0] = 50;
+    //         data[4*m+1] = 50;
+    //         data[4*m+2] = 50;
+    //         data[4*m+3] = 0;
+    //     }
+    // }
 
-            if(data[4*m+0]>255) data[4*m+0] = 255;
-            if(data[4*m+1]>255) data[4*m+1] = 255;
-            if(data[4*m+2]>255) data[4*m+2] = 255;
-        }
-    }
+    // for(int c = Lx; c < Lx + 30; c++){
+    //     for(int r = 0; r < pixels_bot; r++){
+    //         m = r*vis_width + c;
+    //         data[4*m+0] = 255;
+    //         data[4*m+1] = 122;
+    //         data[4*m+2] = 0;
+    //         data[4*m+3] = 0;
+    //     }
+
+    //     for(int r = Ly-pixels_top; r < Ly; r++){
+    //         m = r*vis_width + c;
+    //         n = r*Lx + c;
+    //         data[4*m+0] = 0;
+    //         data[4*m+1] = 122;
+    //         data[4*m+2] = 255;
+    //         data[4*m+3] = 0;
+    //     }
+
+    //     m = Ly/2*vis_width + c;
+    //     data[4*m+0] = 255;
+    //     data[4*m+1] = 255;
+    //     data[4*m+2] = 255;
+    //     data[4*m+3] = 0;
+    // }
+
+
+    // for(int r = 0; r < Ly; r++){
+    //     for(int c = 0; c < Lx; c++){
+    //         m = r*vis_width + c;
+
+    //         if(data[4*m+0]>255) data[4*m+0] = 255;
+    //         if(data[4*m+1]>255) data[4*m+1] = 255;
+    //         if(data[4*m+2]>255) data[4*m+2] = 255;
+    //     }
+    // }
 
 }
 
-void kpm::absorb(){
+void simulator::absorb(){
     //psi2_top = 0;
     //psi2_bot = 0;
 
@@ -854,39 +871,46 @@ void kpm::absorb(){
     //delete array;
 }
 
+void simulator::loop(unsigned Ntimes){
+    int delay = 25;
+    float max = 0;
+    float threshhold = 0;
+    
+    auto start = std::chrono::system_clock::now();
+    for(unsigned j=0; j<Ntimes; j++){
+        // handleEvent(&visual, &engine);
+        get_norm(&max, &threshhold);
 
-void print_arr(float2 *arr, int Lx, int Ly, int offset, int flag){
+        if(norm_top > 0.5){
+        // if(engine.norm_top > 0.5 || engine.win){
+            usleep(1000*1000);
+            // visual.set_victory_screen(0);
+            if(j%10==0) std::cout << "Top player won! Press R to reset.\n";
 
-    int n;
-    for(int j = 0; j < Ly; j++){
-        for(int i = 0; i < Lx; i++){
-            n = (j+offset)*(Lx+2*offset) + offset + i;
+        } else if(norm_bot > 0.5){
+        //} else if(engine.norm_bot > 0.5 || engine.win){
+            usleep(1000*1000);
+            // visual.set_victory_screen(1);
+            if(j%10==0) std::cout << "Bottom player won! Press R to reset.\n";
+        } else {
+            
+            // set_max(threshhold);
+            update_pixel();
+            // if(engine.pressed_showcase) engine.clear_wf_away_from_pot(visual.image->data, visual.width, visual.height);
+            if(!*paused) iterate_time(3);
+            // if(absorb_on) absorb();
 
-            if(flag==0){ 
-                printf("%6.2f ",arr[n].x);
-            } else if(flag==1){ 
-                printf("%6.2f ",arr[n].y);
-            }
+            auto end = std::chrono::system_clock::now();
+            std::chrono::duration<double> elapsed_seconds = end-start;
+            std::cout << "elapsed time: " << elapsed_seconds.count() << "s" << std::endl;
+            start = std::chrono::system_clock::now();
         }
-        std::cout << "\n";
+
+        // visual.update();
+        //if(j%10==0){
+            //std::cout << "time, norm, max, norm_top, norm_bot: " << j << " " << norm << " " << max << " " << engine.norm_top << " " << engine.norm_bot << "\n";
+        //}
+        //usleep(50000);
     }
-
-}
-
-void print_arr(int4 *arr, int Lx, int Ly, int offset, int flag){
-
-    int n;
-    for(int j = 0; j < Ly; j++){
-        for(int i = 0; i < Lx; i++){
-            n = (j+offset)*(Lx+2*offset) + offset + i;
-
-            if(flag==0){ 
-                printf("%6.2d ",arr[n].x);
-            } else if(flag==1){ 
-                printf("%6.2d ",arr[n].y);
-            }
-        }
-        std::cout << "\n";
-    }
-
+    finalize();
 }

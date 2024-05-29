@@ -1,9 +1,15 @@
-#include <CL/opencl.hpp>
 typedef cl_float2 float2;
 typedef cl_int4 int4;
 
-class kpm {
+class simulator {
     public:
+    event_queue *eq;
+    bool *paused;
+
+    uint8_t *buffer_f, *buffer;
+    unsigned buffer_size, buffer_f_size;
+
+
     bool showcase, pressed_showcase;
     //private:
     std::vector<cl::Platform> platforms;
@@ -49,6 +55,10 @@ class kpm {
     bool absorb_on, running, win;
 
     // Methods
+    simulator(event_queue*);
+    void loop(unsigned);
+    void finalize();
+
     void set_geometry(unsigned, unsigned);
     void init_cl();
 
@@ -68,7 +78,7 @@ class kpm {
     void initialize_wf(unsigned i, unsigned j, float kx, float ky, float broad);
     void initialize_tevop(float dt, unsigned Ncheb);
     void iterate_time(unsigned);
-    void update_pixel(char*, unsigned, unsigned);
+    void update_pixel();
     float get_norm(float*, float*);
     void set_max(float);
     void absorb();
@@ -78,8 +88,3 @@ class kpm {
     void update_paddles(int, int, int, int);
     
 };
-
-
-void print_arr(float2 *arr, int Lx, int Ly, int offset, int flag);
-void print_arr(int4 *arr, int Lx, int Ly, int offset, int flag);
-
