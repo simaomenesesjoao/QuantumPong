@@ -6,6 +6,7 @@
 #include <netinet/in.h>
 
 #include "../macros.hpp"
+#include "../event_queue.hpp"
 #include "shared_memory.hpp"
 #include "client.hpp"
 
@@ -52,16 +53,16 @@ int client::connect_to_server(){
     return 0;
 }
 
-void client::init_buffers(){
+void client::init_buffers(unsigned N){
     std::cout << "Initing buffers\n" << std::flush;
-    Nbytes_receive = memory->buffer_length;
-    Nbytes_header = memory->header_length = HEADER_LEN;
+    // Nbytes_receive = memory->buffer_length;
+    Nbytes_header = HEADER_LEN;
     Nbytes_send = HEADER_LEN;
+    Nbytes_receive = N;
 
-    buffer_receive = memory->buffer; // Initialized by SDL interface
-    memory->header = new uint8_t[Nbytes_header];
-    buffer_header = memory->header; 
+    buffer_header = new uint8_t[Nbytes_header]; 
     buffer_send = new uint8_t[Nbytes_send];
+    buffer_receive = new uint8_t[Nbytes_receive];
 
     for(unsigned i=0; i<Nbytes_send; i++){
         buffer_send[i] = 0;
@@ -69,8 +70,9 @@ void client::init_buffers(){
 }
 
 void client::finalize(){
-    //delete [] buffer_send;
-    delete [] memory->header;
+    delete [] buffer_send;
+    delete [] buffer_header;
+    delete [] buffer_receive;
 }
 
 void client::send_event_to_server(uint8_t *data, unsigned len_data){
@@ -91,7 +93,7 @@ bool client::read_one_from_server(){
             usleep(1000*1000);
             continue;
         }
-        std::cout << "loop read one connected\n";
+        // std::cout << "loop read one connected\n";
 
         // Set up the fd_set for select
         fd_set readfds;
@@ -99,7 +101,7 @@ bool client::read_one_from_server(){
         FD_SET(sock, &readfds);
 
         struct timeval timeout;
-        timeout.tv_sec = 1;  // Timeout after 5 seconds
+        timeout.tv_sec = 1;  // Timeout after 1 second
         timeout.tv_usec = 0;
 
 
@@ -111,29 +113,50 @@ bool client::read_one_from_server(){
             //close(sockfd);
             return 1;
         } else if (activity == 0) {
-            std::cout << "Timeout occurred, no data within 1 second." << std::endl;
+            // std::cout << "Timeout occurred, no data within 1 second." << std::endl;
         } else {
 
-            std::cout << "activity found on socket" << sock << " \n";
+            // std::cout << "activity found on socket" << sock << " \n";
             //if (FD_ISSET(sock, &readfds)) {
                 //std::cout << "activity in correct socket\n";
             //}
             // dont think I need to check the socket if there was activity
 
-            int bytesReceived = recv(sock, buffer_header, HEADER_LEN*sizeof(uint8_t), MSG_WAITALL);
-            int has_payload = (int)buffer_header[0];
-            int event = (int)buffer_header[1];
-            std::cout << "received: " << bytesReceived << " from server event " << event << " payload:" << has_payload << "\n" << std::flush;
+            int bytesReceived = recv(sock, buffer_header, Nbytes_header*sizeof(uint8_t), MSG_WAITALL);
+
+            Event<EV_GENERIC> event(buffer_header);
+            int event_id = event.event_ID;
+            int payload_size = event.payload_size;
+            std::cout << "received: " << bytesReceived << " from server event " << event_id << " payload:" << payload_size << "\n" << std::flush;
+
+            if(event_id != EV_STREAM){
+                
+           
+                for(unsigned i=0; i<10; i++){
+                    std::cout << (int)buffer_header[i] << " ";
+                }
+                std::cout << "\n";
+            }
+            
             if(bytesReceived <= 0){
                 close = true;
                 break;
             }
             
+            if(payload_size > 0){
 
-            if(has_payload){
-                std::cout << "has payload\n";
-                bytesReceived = recv(sock, buffer_receive, Nbytes_receive*sizeof(uint8_t),MSG_WAITALL);
-                std::cout << "payload! received: " << bytesReceived << " from server event " << event << " payload:" << has_payload << "\n" << std::flush;
+                // std::cout << "has payload\n";
+                bytesReceived = recv(sock, buffer_receive, payload_size*sizeof(uint8_t),MSG_WAITALL);
+                // if(payload_size < 300*500){
+                //     std::cout << "Small payload received:\n";
+                //     for(int i=0; i<payload_size; i++){
+                //         std::cout << (int)buffer_receive[i] << " ";
+                //     }
+                //     std::cout << "finished receiving\n";
+                    
+                
+                // }
+                // std::cout << "payload! received: " << bytesReceived << " from server event " << event << " payload:" << has_payload << "\n" << std::flush;
 
                 if(bytesReceived <= 0){
                     close = true;

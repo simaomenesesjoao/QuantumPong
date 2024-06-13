@@ -1,3 +1,10 @@
+#ifndef SIMULATOR_H
+#define SIMULATOR_H 1
+
+#include "../event_queue.hpp"
+#include <vector>
+#include <CL/opencl.hpp>
+
 typedef cl_float2 float2;
 typedef cl_int4 int4;
 
@@ -5,6 +12,7 @@ class simulator {
     public:
     event_queue *eq;
     bool *paused;
+    bool potential_changed;
 
     uint8_t *buffer_f, *buffer;
     unsigned buffer_size, buffer_f_size;
@@ -23,19 +31,17 @@ class simulator {
 
     cl::CommandQueue queue;
 
-    cl::NDRange offset;
-    cl::NDRange global_size;
-    cl::NDRange local_size;
 
     bool geometry_init, window_init;
 
     cl::Buffer hops_buf, input_buf, output_buf, acc_buf, pix_buf, score_buf, mag_buf, pot_buf;
-    cl::Buffer scale_buf, max_buf, val_buf, valB_buf;
+    cl::Buffer scale_buf, max_buf, val_buf, valB_buf, changed_buf;
     std::vector<cl::Buffer> jn_bufs;
     unsigned Ncheb;
 
 
     int Lx, Ly, pad, local;
+    int delay_simulation;
     unsigned Ncells, N;
     int radB;
 
@@ -56,7 +62,8 @@ class simulator {
 
     // Methods
     simulator(event_queue*);
-    void loop(unsigned);
+    void loop();
+    void init(unsigned, unsigned, int);
     void finalize();
 
     void set_geometry(unsigned, unsigned);
@@ -79,12 +86,15 @@ class simulator {
     void initialize_tevop(float dt, unsigned Ncheb);
     void iterate_time(unsigned);
     void update_pixel();
+    void get_pot(int, int, int, int, uint8_t*);
     float get_norm(float*, float*);
     void set_max(float);
     void absorb();
 
-    void init_paddles(float, float, float, float, float, float);
+    void init_paddles(int, int, int, int, int, int);
     void reset_state();
     void update_paddles(int, int, int, int);
     
 };
+
+#endif // SIMULATOR_H

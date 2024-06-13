@@ -5,7 +5,7 @@
 #include <netinet/in.h>
 #include <iostream>
 #include "../macros.hpp"
-#include "event_queue.hpp"
+#include "../event_queue.hpp"
 #include "connection_handler.hpp"
 
 connection_handler::connection_handler(event_queue *ev_q){
@@ -52,7 +52,9 @@ void connection_handler::init(unsigned port){
 void connection_handler::process_connections(){
 
     while(accepting_connections){
-        std::cout << "listening to connections\n" << std::flush;
+
+        std::cout << "listening to connections. " << std::flush;
+        std::cout << "connection status: " << connection_status[0] << " " << connection_status[1] << "\n" << std::flush;
         if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
             perror("accept");
             exit(EXIT_FAILURE);
@@ -75,10 +77,9 @@ void connection_handler::process_connections(){
         }
         // This line only runs if a new player has been added
         connection_status[player_number] = 1;
-        int data[100];
-        data[0] = player_number;
-        data[1] = new_socket;
-        eq->add_event(EV_CONNECT, data); 
+        
+        Event<EV_CONNECT> event(player_number, new_socket);
+        eq->add_event(event.buffer_b); 
 
     }
 

@@ -5,12 +5,12 @@
 #include <complex>
 #include <fstream>
 #include <chrono>
-#include <mutex>
+// #include <mutex>
 #include <iostream>
-#include <CL/opencl.hpp>
-#include <algorithm>
+// #include <CL/opencl.hpp>
+// #include <algorithm>
 #include "../macros.hpp"
-#include "event_queue.hpp"
+// #include "event_queue.hpp"
 #include "simulator.hpp"
 
 simulator::simulator(event_queue *evq){
@@ -86,6 +86,9 @@ void simulator::init_buffers(){
         exit(2);
     }
 
+    std::cout << "Initializing GPU buffers. Ncells: " << Ncells <<  " N: ";
+    std::cout << N << " Npixels: " << Npixels << " " << Nhops << "\n";
+
     input_buf  = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(float2)*Ncells);
     output_buf = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(float2)*Ncells);
     acc_buf    = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(float2)*Ncells);
@@ -94,8 +97,9 @@ void simulator::init_buffers(){
     hops_buf   = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(float2)*N*Nhops);
     pix_buf    = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(int4)*Npixels);
 
-    scale_buf  = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(float));
-    max_buf    = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(float));
+    scale_buf    = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(float));
+    changed_buf  = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(bool));
+    max_buf      = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(float));
 
     val_buf    = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(float));
     valB_buf   = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(float));
@@ -106,11 +110,13 @@ void simulator::init_buffers(){
     valB = 0.0;
     val = 0.0;
     radB = 200;
+
     queue.enqueueWriteBuffer(scale_buf, CL_TRUE, 0, sizeof(float), &SCALE);
     queue.enqueueWriteBuffer(max_buf,   CL_TRUE, 0, sizeof(float), &max);
     queue.enqueueWriteBuffer(valB_buf,  CL_TRUE, 0, sizeof(float), &valB);
     queue.enqueueWriteBuffer(val_buf,   CL_TRUE, 0, sizeof(float), &val);
 
+    potential_changed = false;
     absorb_on = true;
     running = true;
     modifier = 1.0;
@@ -132,8 +138,6 @@ void simulator::init_buffers(){
     buffer_f = new uint8_t[buffer_f_size];
     buffer = buffer_f+HEADER_LEN;
 
-    buffer_f[0] = PAYLOAD_ON;
-    buffer_f[1] = EV_STREAM;
     for(unsigned i=0; i<buffer_size; i++){
         buffer[i] = 0;
     }
@@ -166,7 +170,6 @@ void simulator::init_kernels(){
     std::string programString(std::istreambuf_iterator<char>(programFile), (std::istreambuf_iterator<char>()));
 
     // Print out the kernel string
-    //std::cout << programString << "\n";
 
     // Build the program. The build method requires the sources to be inside a vector
     std::vector<std::string> sourceStrings;
@@ -265,21 +268,25 @@ void simulator::init_kernels(){
 
     kset_local_pot.setArg(0, pot_buf);
     kset_local_pot.setArg(1, val_buf);
+    kset_local_pot.setArg(2, changed_buf);
 
     kset_local_pot_rect.setArg(0, hops_buf);
     kset_local_pot_rect.setArg(1, pot_buf);
     kset_local_pot_rect.setArg(2, val_buf);
     kset_local_pot_rect.setArg(3, scale_buf);
+    kset_local_pot_rect.setArg(4, changed_buf);
+
+    kclear_local_pot.setArg(0, hops_buf);
+    kclear_local_pot.setArg(1, pot_buf);
+    kclear_local_pot.setArg(2, changed_buf);
 
     kset_local_B.setArg(0, mag_buf);
     kset_local_B.setArg(1, valB_buf);
 
-    kclear_local_pot.setArg(0, hops_buf);
-    kclear_local_pot.setArg(1, pot_buf);
 
 }
 
-void simulator::init_paddles(float pt_x, float pt_y, float pb_x, float pb_y, float paddle_w, float paddle_h){
+void simulator::init_paddles(int pt_x, int pt_y, int pb_x, int pb_y, int paddle_w, int paddle_h){
     top_player_x = pt_x;
     top_player_prev_x = pt_x;
     bot_player_x = pb_x;
@@ -295,8 +302,13 @@ void simulator::init_paddles(float pt_x, float pt_y, float pb_x, float pb_y, flo
 }
 
 void simulator::update_paddles(int pt_x, int pt_y, int pb_x, int pb_y){
+    // std::cout << "Entered update_paddles\n" << std::flush;
     // Update the values of the paddle position
 
+    cl::NDRange offset;
+    cl::NDRange global_size;
+    cl::NDRange local_size;
+    
     if(pb_x < 0) pb_x = 0;
     if(pt_x < 0) pt_x = 0;
     if(pb_y < 0) pb_y = 0;
@@ -327,15 +339,26 @@ void simulator::update_paddles(int pt_x, int pt_y, int pb_x, int pb_y){
     if(pb_y <    paddle_height/2) bot_player_y =    paddle_height/2; 
     if(pb_y > Ly-paddle_height/2) bot_player_y = Ly-paddle_height/2;
 
-    //std::cout << pb_x << " " << pb_y << " " << pt_x << " " << pt_y << "\n";
-    //std::cout << bot_player_x << " " << bot_player_y << " " << top_player_x << " " << top_player_y << "\n";
+    // Use the event class to convert the data into the buffer
+    
+    Event<EV_STREAM> event(N, top_player_x, top_player_y, bot_player_x, bot_player_y);
+
+
+    std::cout << "simulator - update_paddles: buffer_f\n";
+    for(unsigned i=0; i<HEADER_LEN; i++){
+        buffer_f[i] = event.buffer_b[i];
+        std::cout << (int)buffer_f[i] << " ";
+    }
+    std::cout << "\n";
 
     global_size = cl::NDRange{(cl::size_type)paddle_width, (cl::size_type)paddle_height};
     local_size  = cl::NDRange{(cl::size_type)local, (cl::size_type)local};
 
-
+    // Load the value of the potential and change status into the GPU
     float val = 4;
+    potential_changed = false;
     queue.enqueueWriteBuffer(val_buf, CL_TRUE, 0, sizeof(float), &val);
+    queue.enqueueWriteBuffer(changed_buf, CL_TRUE, 0, sizeof(bool), &potential_changed);
 
     // Update player on top. Remove potential from previous position and add potential to new one
     cl::size_type startx, starty;
@@ -344,14 +367,13 @@ void simulator::update_paddles(int pt_x, int pt_y, int pb_x, int pb_y){
     starty = top_player_prev_y - paddle_height/2;
     offset = cl::NDRange{startx, starty};
     queue.enqueueNDRangeKernel(kclear_local_pot, offset, global_size, local_size);
-
+    
     startx = top_player_x - paddle_width/2;
     starty = top_player_y - paddle_height/2;
     offset = cl::NDRange{startx, starty};
     queue.enqueueNDRangeKernel(kset_local_pot_rect, offset, global_size, local_size);
 
     // same thing for the player on the bottom
-    //offset = cl::NDRange{bot_player_prev_x - paddle_width/2, bot_player_prev_y - paddle_height/2};
     startx = bot_player_prev_x - paddle_width/2;
     starty = bot_player_prev_y - paddle_height/2;
     offset = cl::NDRange{startx, starty};
@@ -360,13 +382,47 @@ void simulator::update_paddles(int pt_x, int pt_y, int pb_x, int pb_y){
     startx = bot_player_x - paddle_width/2;
     starty = bot_player_y - paddle_height/2;
     offset = cl::NDRange{startx, starty};
-    //offset = cl::NDRange{bot_player_x - paddle_width/2, bot_player_y - paddle_height/2};
     queue.enqueueNDRangeKernel(kset_local_pot_rect, offset, global_size, local_size);
 
+
+    // CHANGE: Does the GPU finish the previous instructions before this runs?
+    queue.enqueueReadBuffer(changed_buf, CL_TRUE, 0, sizeof(bool), &potential_changed);
+    if(potential_changed){
+        queue.enqueueWriteBuffer(changed_buf, CL_TRUE, 0, sizeof(bool), &potential_changed);
+        std::cout << "CHANGED POTENTIAL\n";
+        int dd = 10;
+        int x0 = paddle_width/2;
+        int y0 = paddle_height/2;
+
+        int dx = paddle_width;
+        int dy = paddle_height;
+
+        int xb = bot_player_prev_x;
+        if(bot_player_x  < bot_player_prev_x) xb  = bot_player_x;
+        if(bot_player_x != bot_player_prev_x) dx += dd;
+
+        int yb = bot_player_prev_y;
+        if(bot_player_y  < bot_player_prev_y) yb  = bot_player_y;
+        if(bot_player_y != bot_player_prev_y) dy += dd;
+
+        Event<EV_SEND_POT> event1(xb-x0, yb-y0, dx, dy,
+         top_player_x, top_player_y, bot_player_x, bot_player_y);
+        // Event<EV_SEND_POT> event2(top_player_x-x0, top_player_y-y0, paddle_width, paddle_height);
+        // Event<EV_STREAM> event(N, top_player_x, top_player_y, bot_player_x, bot_player_y);
+        
+        eq->add_event(event1.buffer_b);
+        // eq->add_event(event2.buffer_b);
+    }
+
+    potential_changed = false;
 }
 
 void simulator::set_local_B(unsigned x, unsigned y, float v){
     valB = v;
+
+    cl::NDRange offset;
+    cl::NDRange global_size;
+    cl::NDRange local_size;
 
     if(radB > 2*Ly+2*Lx) radB = 2*Ly+2*Lx;
     unsigned dx = radB;
@@ -374,8 +430,6 @@ void simulator::set_local_B(unsigned x, unsigned y, float v){
 
 
     queue.enqueueWriteBuffer(valB_buf,   CL_TRUE, 0, sizeof(float), &valB);
-    //if(x<dx/2) x=dx/2;
-    //if(y<dy/2) y=dy/2;
 
     offset      = cl::NDRange{(cl::size_type)(x-dx/2), (cl::size_type)(y-dy/2)};
     global_size = cl::NDRange{(cl::size_type)(dx), (cl::size_type)(dy)};
@@ -389,9 +443,16 @@ void simulator::set_local_B(unsigned x, unsigned y, float v){
 }
 
 void simulator::set_local_pot(unsigned x, unsigned y, unsigned dx, unsigned dy, float v){
-    val = v;
+    std::cout << "simulator: set_local_pot:\n";
 
+    cl::NDRange offset;
+    cl::NDRange global_size;
+    cl::NDRange local_size;
+
+    val = v;
+    potential_changed = false;
     queue.enqueueWriteBuffer(val_buf,   CL_TRUE, 0, sizeof(float), &val);
+    queue.enqueueWriteBuffer(changed_buf, CL_TRUE, 0, sizeof(bool), &potential_changed);
 
     offset      = cl::NDRange{(cl::size_type)(x-dx/2), (cl::size_type)(y-dy/2)};
     global_size = cl::NDRange{(cl::size_type)(dx), (cl::size_type)(dy)};
@@ -402,9 +463,27 @@ void simulator::set_local_pot(unsigned x, unsigned y, unsigned dx, unsigned dy, 
     global_size = cl::NDRange{(cl::size_type)(Lx), (cl::size_type)(Ly)};
     local_size  = cl::NDRange{(cl::size_type)(local), (cl::size_type)(local)};
     queue.enqueueNDRangeKernel(set_sq_B, offset, global_size, local_size);
+
+     // CHANGE: Does the GPU finish the previous instructions before this runs?
+    queue.enqueueReadBuffer(changed_buf, CL_TRUE, 0, sizeof(bool), &potential_changed);
+    if(potential_changed){
+        potential_changed = false;
+        queue.enqueueWriteBuffer(changed_buf, CL_TRUE, 0, sizeof(bool), &potential_changed);
+        std::cout << "CHANGED POTENTIAL\n";
+
+        Event<EV_SEND_POT> event(x-dx/2,y-dy/2,dx,dy,
+         top_player_x, top_player_y, bot_player_x, bot_player_y);
+        
+        eq->add_event(event.buffer_b);
+    }
 }
 
 void simulator::initialize_pot_from(){
+
+    cl::NDRange offset;
+    cl::NDRange global_size;
+    cl::NDRange local_size;
+
     // Initialize container to zeros
     float *text_pot = new float[N];
     for(int i=0; i<N; i++) text_pot[i] = 0;
@@ -495,6 +574,10 @@ void simulator::reset_state(){
 void simulator::set_H(){//float d, int length, int width){
     // d, length, width is for the potential, to be implemented later
     //queue.enqueueWriteBuffer(  hops_buf, CL_TRUE, 0, sizeof(float2)*Nhops*WIDTH*WIDTH, hops);
+
+    cl::NDRange offset;
+    cl::NDRange global_size;
+    cl::NDRange local_size;
 
     offset      = cl::NDRange{(cl::size_type)(0), (cl::size_type)(0)};
     global_size = cl::NDRange{(cl::size_type)(Lx), (cl::size_type)(Ly)};
@@ -592,6 +675,11 @@ void simulator::initialize_tevop(float dt, unsigned Npolys){
 }
 
 void simulator::iterate_time(unsigned niters){
+    // std::cout << "Entered iterate_time\n" << std::flush;
+
+    cl::NDRange offset;
+    cl::NDRange global_size;
+    cl::NDRange local_size;
 
     for(unsigned n=0; n<niters; n++){
         // Pairs of chebs
@@ -623,6 +711,8 @@ void simulator::iterate_time(unsigned niters){
 
         queue.enqueueNDRangeKernel(copy, offset, global_size, local_size);
     }
+
+    // std::cout << "Left iterate_time\n" << std::flush;
 }
 
 void simulator::set_max(float m){
@@ -711,8 +801,63 @@ float simulator::get_norm(float *maximum, float *threshhold){
     return norm2;
 }
 
+void simulator::get_pot(int x, int y, int dx, int dy, uint8_t *buffer){
+    std::cout << "simulator::get_pot\n" << std::flush;
+    int ddx = dx;
+    int ddy = dy;
+    if(x + ddx > Lx) ddx = Lx-x;
+    if(y + ddy > Ly) ddy = Ly-y;
+
+    cl::NDRange offset;
+    cl::NDRange global_size;
+    cl::NDRange local_size;
+
+    // Get local potential
+    offset      = cl::NDRange{(cl::size_type)(0), (cl::size_type)(0)};
+    global_size = cl::NDRange{(cl::size_type)(Lx), (cl::size_type)(Ly)};
+    local_size  = cl::NDRange{(cl::size_type)(local), (cl::size_type)(local)};
+
+    int4 *array = new int4[Npixels];
+    queue.enqueueNDRangeKernel(colormapV,  offset, global_size, local_size);
+    queue.enqueueReadBuffer(   pix_buf, CL_TRUE, 0, sizeof(int4)*Npixels, array);
+
+    int n;
+    // for(int i=0; i<Lx; i++){
+    //     for(int j=0; j<Ly; j++){
+    //         n = i + Lx*j;
+    //         std::cout << array[n].x << " ";
+    //     }
+    //     std::cout << "\n";
+    // }
+    
+    // std::cout << "x,y: " << x << " " << y << "\n";
+    int m;
+    for(int i=0; i<ddx; i++){
+        for(int j=0; j<ddy; j++){
+            n = i + dx*j;
+            m = i+x + Lx*(j+y);
+            buffer[n] = array[m].x;
+            // std::cout << array[m].x << " ";
+        }
+        // std::cout << "\n";
+    }
+    // int n;
+    // for(int x0=0; x0<dx; x0++){
+    //     for(int y0=0; y0<dy; y0++){
+    //         n = x0 + dx*y0;
+    //         std::cout << (int)buffer[n+HEADER_LEN] << " ";
+    //     }
+    //     std::cout << "\n";
+    // }
+
+    delete[] array;
+}
+
 void simulator::update_pixel(){
 
+    cl::NDRange offset;
+    cl::NDRange global_size;
+    cl::NDRange local_size;
     // Update the pixels on the screen
     // if showcase==true, then the potentials and the paddles wont be drawn
 
@@ -852,65 +997,121 @@ void simulator::update_pixel(){
 }
 
 void simulator::absorb(){
-    //psi2_top = 0;
-    //psi2_bot = 0;
+    unsigned absorption_width = 20;
+    
+    cl::NDRange offset;
+    cl::NDRange global_size;
+    cl::NDRange local_size;
 
     offset      = cl::NDRange{(cl::size_type)(pad), (cl::size_type)(pad)};
-    global_size = cl::NDRange{(cl::size_type)(Lx), (cl::size_type)(20)};
+    global_size = cl::NDRange{(cl::size_type)(Lx), (cl::size_type)(absorption_width)};
     local_size  = cl::NDRange{(cl::size_type)(local), (cl::size_type)(local)};
 
     queue.enqueueNDRangeKernel(kabsorb,  offset, global_size, local_size);
 
-    offset      = cl::NDRange{(cl::size_type)(pad), (cl::size_type)(Ly-20-pad)};
-    global_size = cl::NDRange{(cl::size_type)(Lx), (cl::size_type)(20)};
+    offset      = cl::NDRange{(cl::size_type)(pad), (cl::size_type)(Ly-absorption_width-pad)};
+    global_size = cl::NDRange{(cl::size_type)(Lx), (cl::size_type)(absorption_width)};
     local_size  = cl::NDRange{(cl::size_type)(local), (cl::size_type)(local)};
 
     queue.enqueueNDRangeKernel(kabsorb,  offset, global_size, local_size);
-    //float2 *array = new float2[Ncells];
-    //queue.enqueueReadBuffer(input_buf, CL_TRUE, 0, sizeof(float2)*Ncells, array);
-    //delete array;
 }
 
-void simulator::loop(unsigned Ntimes){
-    int delay = 25;
+void simulator::init(unsigned Lx, unsigned Ly, int delay){
+    delay_simulation = delay;
+    unsigned pad = 1;
+    unsigned local = 2;
+
+    // Time evolution operator parameters
+    float dt = 2.0/10;
+    unsigned Ncheb = 10;
+
+    // initial wavefunction parameters: center, momentum, spread
+    unsigned ix = Lx/2;
+    unsigned iy = Ly/2;
+    float kx = 0.5;
+    float ky = 1.0;
+    float broad = 20.0;
+
+    showcase = false;
+
+    init_cl();
+    init_geometry(Lx, Ly, pad, local);
+    init_window(Lx, Ly);
+    set_hamiltonian_sq();
+    init_buffers();
+    init_kernels();
+    initialize_tevop(dt, Ncheb);
+    set_H();
+    if(showcase) initialize_pot_from();
+    initialize_wf(ix, iy, kx, ky, broad);
+
+    int paddle_x = 100;
+    int paddle_y_bot = 50;
+    int paddle_y_top = Ly-50;
+    int paddle_width = 100;
+    int paddle_height = 20;
+    init_paddles(paddle_x, paddle_y_top, paddle_x, paddle_y_bot, paddle_width, paddle_height);
+    update_paddles(paddle_x, paddle_y_top, paddle_x, paddle_y_bot);
+}
+
+void simulator::loop(){
+
+    unsigned Ntimes = 200000;
+    
     float max = 0;
     float threshhold = 0;
     
     auto start = std::chrono::system_clock::now();
+
+    // CHANGE: Replace this with while true
     for(unsigned j=0; j<Ntimes; j++){
-        // handleEvent(&visual, &engine);
+        
+        // CHANGE: the colormap will be implemented client-side. This function can be replaced
         get_norm(&max, &threshhold);
 
         if(norm_top > 0.5){
+            // eq->add_event(EV_PLAYER_WON, 0);
         // if(engine.norm_top > 0.5 || engine.win){
-            usleep(1000*1000);
+            // usleep(1000*1000);
             // visual.set_victory_screen(0);
-            if(j%10==0) std::cout << "Top player won! Press R to reset.\n";
+            // if(j%10==0) std::cout << "Top player won! Press R to reset.\n";
 
         } else if(norm_bot > 0.5){
+            // eq->add_event(EV_PLAYER_WON, 1);
         //} else if(engine.norm_bot > 0.5 || engine.win){
-            usleep(1000*1000);
+            // usleep(1000*1000);
             // visual.set_victory_screen(1);
-            if(j%10==0) std::cout << "Bottom player won! Press R to reset.\n";
+            // if(j%10==0) std::cout << "Bottom player won! Press R to reset.\n";
         } else {
             
             // set_max(threshhold);
-            update_pixel();
+            
             // if(engine.pressed_showcase) engine.clear_wf_away_from_pot(visual.image->data, visual.width, visual.height);
-            if(!*paused) iterate_time(3);
+            if(!*paused){
+                
+                iterate_time(3);
+
+                // CHANGE: Replace this function name and functionality, since the 
+                // colormap will be done client-side
+                update_pixel();
+            }
             // if(absorb_on) absorb();
 
-            auto end = std::chrono::system_clock::now();
-            std::chrono::duration<double> elapsed_seconds = end-start;
-            std::cout << "elapsed time: " << elapsed_seconds.count() << "s" << std::endl;
-            start = std::chrono::system_clock::now();
+            
         }
 
         // visual.update();
         //if(j%10==0){
             //std::cout << "time, norm, max, norm_top, norm_bot: " << j << " " << norm << " " << max << " " << engine.norm_top << " " << engine.norm_bot << "\n";
         //}
-        //usleep(50000);
+        auto end = std::chrono::system_clock::now();
+        std::chrono::duration<double> elapsed_seconds = end-start;
+        double elapsed_ms = elapsed_seconds.count()*1000;
+        // std::cout << "simulation time: " << elapsed_ms << "ms" << std::endl;
+        
+        if(elapsed_ms*1000 < delay_simulation){
+            usleep(delay_simulation-elapsed_ms*1000);
+        }
+        start = std::chrono::system_clock::now();
     }
-    finalize();
 }

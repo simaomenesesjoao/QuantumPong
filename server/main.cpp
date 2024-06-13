@@ -6,9 +6,9 @@
 #include <thread>
 #include <netinet/in.h>
 #include <CL/opencl.hpp>
-#include "event_queue.hpp"
-#include "simulator.hpp"
-#include "connection_handler.hpp"
+// #include "event_queue.hpp"
+// #include "simulator.hpp"
+// #include "connection_handler.hpp"
 #include "game_engine.hpp"
 
 int main(){

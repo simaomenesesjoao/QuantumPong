@@ -50,7 +50,7 @@ void kernel set_sq_B(__global float2 *hops, __global float *SCALE, __global floa
 }
 
 
-void kernel set_local_pot(__global float *local_pot, __global float *val){
+void kernel set_local_pot(__global float *local_pot, __global float *val, __global bool *changed){
 
     int x = get_global_id(0);
     int y = get_global_id(1);
@@ -64,16 +64,22 @@ void kernel set_local_pot(__global float *local_pot, __global float *val){
     int y0 = get_global_offset(1);
     int dx = x-x0-rad;
     int dy = y-y0-rad;
+    float dif=0;
 
     if(x>=0 && x < LX && y>=0 && y<LY){
         if(dx*dx + dy*dy < rad*rad){
+            dif = local_pot[i]-val[0];
+
+            // Many threads write to this at the same time. It should be fine though
+            if(dif*dif > 1e-5) changed[0] = true;
+
             local_pot[i] = val[0];
         }
     }
 
 }
 
-void kernel set_local_pot_rect(__global float2 *hops, __global float *pot, __global float *val, __global float *SCALE){
+void kernel set_local_pot_rect(__global float2 *hops, __global float *pot, __global float *val, __global float *SCALE, __global bool *changed){
 
     int x = get_global_id(0);
     int y = get_global_id(1);
@@ -82,6 +88,11 @@ void kernel set_local_pot_rect(__global float2 *hops, __global float *pot, __glo
 
     float v = val[0]/SCALE[0];
     hops[j5] = (float2)(v, 0.0); // Local potential
+
+    float dif = pot[i] - val[0];
+    if(dif*dif > 1e-5) changed[0] = true;
+
+
     pot[i] = val[0];
 
 }
@@ -119,10 +130,14 @@ void kernel set_local_B(__global float *mag, __global float *val){
 
 }
 
-void kernel clear_local_pot(__global float2 *hops, __global float *pot){
+void kernel clear_local_pot(__global float2 *hops, __global float *pot, __global bool *changed){
     int i = get_global_id(1)*LX + get_global_id(0);
     int j5 = NHOPS*i;
+    // printf("%d %d %d %d d%d\n", get_global_id(0), get_global_id(1), i, j5, NHOPS );
     hops[j5] = (float2)(0.0, 0.0); // Local potential
+
+    float dif = pot[i] - 0.0;
+    if(dif*dif > 1e-5) changed[0] = true;
     pot[i] = 0;
 }
 
@@ -195,7 +210,7 @@ void kernel colormap(__global float2 *acc, __global int4 *pix, __global float *m
 
 void kernel colormapV(__global float *pot, __global int4 *pix){
     int i = get_global_id(1)*LX + get_global_id(0);
-    float max=1.0;
+    float max=2.0;
     //float max=8.0; // actual value
     int value = (int)(255*pot[i]/max);
 
