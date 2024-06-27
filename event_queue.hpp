@@ -22,10 +22,12 @@ class event_queue{
 
 
 
-template <int ID>
-class Event{};
+// template <int ID>
+// class Event{
+//     buffer_b;
+// };
 
-template <> class Event <EV_GENERIC>{
+template <int ID> class Event{
     public:
         union {
             struct {
@@ -38,7 +40,7 @@ template <> class Event <EV_GENERIC>{
 
 
         Event(int pnum){
-            event_ID = EV_GENERIC;
+            event_ID = ID;
             payload_size = PAYLOAD_OFF;
             player_number = pnum;           
         }
@@ -173,6 +175,58 @@ template <> class Event <EV_SEND_INIT_INFO>{
         }
         ~Event(){};
 };
+
+template <> class Event <EV_START_GAME>{
+    public:
+        union {
+            struct {
+                int event_ID;
+                int has_payload;
+                int player_number;
+            };
+            uint8_t buffer_b[HEADER_LEN];
+        };
+
+        Event(){
+            event_ID = EV_START_GAME;
+            has_payload = PAYLOAD_OFF;
+            player_number = 0; // Not important here
+        }
+        
+        Event(uint8_t *buf){
+            for(unsigned i=0; i<HEADER_LEN; i++){
+                buffer_b[i] = buf[i];
+            }
+        }
+
+        ~Event(){};
+};
+
+// template <> class Event <EV_QUIT_GAME>{
+//     public:
+//         union {
+//             struct {
+//                 int event_ID;
+//                 int has_payload;
+//                 int player_number;
+//             };
+//             uint8_t buffer_b[HEADER_LEN];
+//         };
+
+//         Event(int pnum){
+//             event_ID = EV_QUIT_GAME;
+//             has_payload = PAYLOAD_OFF;
+//             player_number = pnum; // Not important here
+//         }
+        
+//         Event(uint8_t *buf){
+//             for(unsigned i=0; i<HEADER_LEN; i++){
+//                 buffer_b[i] = buf[i];
+//             }
+//         }
+
+//         ~Event(){};
+// };
 
 template <> class Event <EV_PRESSED_SPACE>{
     public:
@@ -358,8 +412,7 @@ template <> class Event <EV_MOUSEBUTTONDOWN>{
         ~Event(){};
 };
 
-template <>
-class Event <EV_SEND_POT>{
+template <> class Event <EV_SEND_POT>{
     public:
         union {
             struct {

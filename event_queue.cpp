@@ -42,9 +42,9 @@ int event_queue::add_event(uint8_t *data){
 
     for(unsigned i=0; i<HEADER_LEN; i++){
         events[head][i] = data[i];
-        std::cout << (int)events[head][i] << " ";
+        //std::cout << (int)events[head][i] << " ";
     }
-    std::cout << "\n";
+    //std::cout << "\n";
     
     head = new_head;
     mutex.unlock();
