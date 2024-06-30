@@ -111,34 +111,34 @@ template <> class Event <EV_DISCONNECT>{
         ~Event(){};
 };
 
-template <> class Event <EV_CHANGE_SCREEN>{
-    public:
-        union {
-            struct {
-                int event_ID;
-                int has_payload;
-                int player_number;
-                int screen_number;
+// template <> class Event <EV_END_SCREEN>{
+//     public:
+//         union {
+//             struct {
+//                 int event_ID;
+//                 int has_payload;
+//                 int player_number;
+//                 int screen_number;
 
-            };
-            uint8_t buffer_b[HEADER_LEN];
-        };
+//             };
+//             uint8_t buffer_b[HEADER_LEN];
+//         };
 
 
-        Event(int pnum, int screen){
-            event_ID = EV_CHANGE_SCREEN;
-            has_payload = PAYLOAD_OFF;
-            player_number = pnum;
-            screen_number = screen;
-        }
+//         Event(int pnum, int screen){
+//             event_ID = EV_CHANGE_SCREEN;
+//             has_payload = PAYLOAD_OFF;
+//             player_number = pnum;
+//             screen_number = screen;
+//         }
         
-        Event(uint8_t *buf){
-            for(unsigned i=0; i<HEADER_LEN; i++){
-                buffer_b[i] = buf[i];
-            }
-        }
-        ~Event(){}; 
-};
+//         Event(uint8_t *buf){
+//             for(unsigned i=0; i<HEADER_LEN; i++){
+//                 buffer_b[i] = buf[i];
+//             }
+//         }
+//         ~Event(){}; 
+// };
 
 template <> class Event <EV_SEND_INIT_INFO>{
     public:
@@ -261,22 +261,26 @@ template <> class Event <EV_UPDATE_STATUS>{
                 int event_ID;
                 int has_payload;
                 int player_number;
-
-                bool ready[2];
-                bool connection_status[2];
+                int state_p1;
+                int state_p2;
 
             };
             uint8_t buffer_b[HEADER_LEN];
         };
 
 
-        Event(int pnum, bool *ready_stat, bool *connection_stat){
+        Event(int pnum, int playerState, int otherPlayerState){
             event_ID = EV_UPDATE_STATUS;
             has_payload = PAYLOAD_OFF;
             player_number = pnum;
-            for(unsigned i=0; i<2; i++){
-                ready[i] = ready_stat[i];
-                connection_status[i] = connection_stat[i];
+
+
+            if(pnum == 0){
+                state_p1 = playerState;
+                state_p2 = otherPlayerState;
+            } else {
+                state_p2 = playerState;
+                state_p1 = otherPlayerState;
             }
             
         }

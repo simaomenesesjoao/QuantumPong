@@ -16,18 +16,39 @@
 
 // g++ *.cpp -o client  `sdl2-config --libs --cflags` -Wall -lm && ./client 
 
-void on_change_screen(shared_memory *memory, client *cl, graphics *gr, uint8_t *data){
+
+
+void on_pause_game(shared_memory *memory, client *cl, graphics *gr, uint8_t *data){
+    std::cout << "on_pause_game\n";
+    gr->alpha = 100;
+    gr->update();
+}
+
+
+void on_unpause_game(shared_memory *memory, client *cl, graphics *gr, uint8_t *data){
+    std::cout << "on_unpause_game\n";
+    gr->alpha = 255;
+    gr->update();
+}
+
+
+
+void on_end_screen(shared_memory *memory, client *cl, graphics *gr, uint8_t *data){
+    std::cout << "on_end_screen\n";
+
+    Event<EV_END_SCREEN> event(data);
+    gr->endScreen(event.player_number == cl->player_number);
+    
+}
+
+
+void on_update_status(shared_memory *memory, client *cl, graphics *gr, uint8_t *data){
     std::cout << "on_change_screen\n";
 
-    Event<EV_CHANGE_SCREEN> event(data);
-    int screen_number = event.screen_number;
+    Event<EV_UPDATE_STATUS> event(data);
+    int player_number = event.player_number;
     
-    if(screen_number == 0) gr->set_screen(200,0,0);
-    if(screen_number > 0 && screen_number < 5) gr->set_screen(0,screen_number*50, 0);
-
-    if(screen_number == 5) gr->set_screen(200,200,200);
-    if(screen_number == 6) gr->set_screen(0,250,250);
-    if(screen_number == 7) gr->set_screen(250,250,0);
+    gr->update_lobby(event.state_p1, event.state_p2);
 }
 
 
@@ -179,9 +200,16 @@ int main(){
             
 
             if(event == EV_SEND_INIT_INFO) on_send_init_info(&memory, &cl, &gr, cl.buffer_header);
-            if(event == EV_CHANGE_SCREEN) on_change_screen(&memory, &cl, &gr, cl.buffer_header);
+            if(event == EV_UPDATE_STATUS) on_update_status(&memory, &cl, &gr, cl.buffer_header);
+            if(event == EV_END_SCREEN) on_end_screen(&memory, &cl, &gr, cl.buffer_header);
             if(event == EV_STREAM) on_stream(&memory, &cl, &gr, cl.buffer_header);
             if(event == EV_SEND_POT) on_send_pot(&memory, &cl, &gr, cl.buffer_header);
+
+
+            if(event == EV_PAUSE_GAME) on_pause_game(&memory, &cl, &gr, cl.buffer_header);
+            if(event == EV_UNPAUSE_GAME) on_unpause_game(&memory, &cl, &gr, cl.buffer_header);
+
+
             cl.socket_has_data = false;
             sem_post(&cl.semaphore1);
 

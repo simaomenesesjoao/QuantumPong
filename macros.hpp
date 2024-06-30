@@ -18,7 +18,9 @@
 #define EV_ADD_MAG 11
 #define EV_START_GAME 12
 #define EV_QUIT_GAME 13
-#define EV_UNPAUSE_GAME 14
+#define EV_PAUSE_GAME 14
+#define EV_UNPAUSE_GAME 15
+#define EV_END_SCREEN 16
 
 
 // Variables

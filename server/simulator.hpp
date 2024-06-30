@@ -11,7 +11,7 @@ typedef cl_int4 int4;
 class simulator {
     public:
     event_queue *eq;
-    bool *paused;
+    bool paused = true;
     bool potential_changed;
 
     uint8_t *buffer_f, *buffer;

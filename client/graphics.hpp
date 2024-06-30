@@ -1,4 +1,7 @@
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_render.h>
+#include <string>
+#include <SDL2/SDL_ttf.h>
 #include "shared_memory.hpp"
 
 class graphics {
@@ -6,12 +9,29 @@ class graphics {
     public:
         SDL_Window* win;
         SDL_Renderer* rend;
-        SDL_Texture* tex;
+        TTF_Font* gFont;
+
+
+        SDL_Texture *wavefunctionTexture, *potTexture;
+
+
+
+        SDL_Texture *DisconnectedStatusTexture, *ConnectedStatusTexture, *inEndStatusTexture, *WantNewStatusTexture;
+        SDL_Surface *DisconnectedStatusSurface, *ConnectedStatusSurface, *inEndStatusSurface, *WantNewStatusSurface;
+
+        SDL_Texture *Player1Texture, *Player2Texture, *placeholderTexture;
+        SDL_Surface *Player1Surface, *Player2Surface, *placeholderSurface;
+
+        SDL_Texture *paddle1Texture, *paddle2Texture;
+        SDL_Texture *victoryTexture, *defeatTexture;
+
+        SDL_Texture *whiteMaskTexture;
 
         unsigned width, height;
         unsigned Nbytes;
+        int alpha = 255;
 
-        uint8_t *buffer_pixels;
+        uint8_t *buffer_pixels_wavefunction, *buffer_pixels_potential;
         int *buffer_potential;
         int *buffer_wavefunction;
         int *buffer_SDL;
@@ -24,6 +44,7 @@ class graphics {
     graphics(shared_memory*);
     void init(unsigned, unsigned);
     void finalize();
+    void CreateTextureFromString(std::string , SDL_Color , SDL_Texture **, SDL_Surface **);
     
     bool get_one_SDL_event();
 
@@ -31,9 +52,11 @@ class graphics {
     void draw_potential();
     void update_potential(int, int, int, int, uint8_t*);
     void update_wavefunction(uint8_t*);
-    void draw_paddle(int, int, int, int, int);
+    void draw_paddle(int, int, SDL_Texture*);
     void update();
 
-    void set_screen(unsigned, unsigned, unsigned);
+    // void set_screen(unsigned, unsigned, unsigned);
+    void update_lobby(int, int);
+    void endScreen(bool);
 
 };

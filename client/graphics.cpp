@@ -1,3 +1,7 @@
+#include <SDL2/SDL_keycode.h>
+#include <SDL2/SDL_stdinc.h>
+#include <SDL2/SDL_surface.h>
+#include <cstddef>
 #include <iostream>
 #include <unistd.h>
 #include <SDL2/SDL.h>
@@ -6,9 +10,24 @@
 #include "shared_memory.hpp"
 #include "graphics.hpp"
 
+
+
 graphics::graphics(shared_memory *mem){
     memory = mem;
 }
+
+
+void graphics::CreateTextureFromString(std::string textureText, SDL_Color textColor, SDL_Texture **texture, SDL_Surface **surface){
+    *surface = TTF_RenderText_Blended( gFont, textureText.c_str(), textColor );
+    if(*surface == NULL) 
+        std::cout << "Problem generating surface\n";
+
+    *texture = SDL_CreateTextureFromSurface( rend, *surface );
+	if(*texture == NULL) 
+        std::cout << "Problem generating texture\n";
+
+}
+
 
 void graphics::init(unsigned WIDTH, unsigned HEIGHT){
     width = WIDTH;
@@ -20,18 +39,21 @@ void graphics::init(unsigned WIDTH, unsigned HEIGHT){
     y1 = height/2;
 
     // Initialize SDL
-    if (SDL_Init(SDL_INIT_EVERYTHING) != 0) { printf("error initializing SDL: %s\n", SDL_GetError()); }
+    if (SDL_Init(SDL_INIT_EVERYTHING) != 0) { 
+        printf("error initializing SDL: %s\n", SDL_GetError()); 
+    }
 
-    win = SDL_CreateWindow("QP", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, 0);
+    win = SDL_CreateWindow("Quantum Pong", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, 0);
     Uint32 render_flags = SDL_RENDERER_ACCELERATED;
     rend = SDL_CreateRenderer(win, -1, render_flags);
-    tex = SDL_CreateTexture(rend, SDL_PIXELFORMAT_BGRA8888, SDL_TEXTUREACCESS_STREAMING, WIDTH, HEIGHT);
+    wavefunctionTexture = SDL_CreateTexture(rend, SDL_PIXELFORMAT_BGRA8888, SDL_TEXTUREACCESS_STREAMING, WIDTH, HEIGHT);
 
 
     PIXEL_SIZE = 4;
     Nbytes = width*height*PIXEL_SIZE;
 
-    buffer_pixels = new uint8_t[Nbytes];         // buffer with pixels to put on screen
+    buffer_pixels_wavefunction = new uint8_t[Nbytes];         // buffer with pixels to put on screen
+    buffer_pixels_potential = new uint8_t[Nbytes];         // buffer with pixels to put on screen
     buffer_potential = new int[width*height];    // buffer with potential value
     buffer_wavefunction = new int[width*height]; // buffer with wavefunction value
     buffer_SDL = new int[HEADER_LEN];            // buffer with SDL events
@@ -39,6 +61,52 @@ void graphics::init(unsigned WIDTH, unsigned HEIGHT){
     for(int i=0; i<width*height; i++){
         buffer_potential[i] = 0;
     }
+
+
+    //Initialize SDL_ttf and font-related things
+    if( TTF_Init() == -1 ){
+        printf( "SDL_ttf could not initialize! SDL_ttf Error: %s\n", TTF_GetError() );
+    }
+
+    gFont = TTF_OpenFont( "Arial.TTF", 28 );
+	if( gFont == NULL ){
+		printf( "Failed to load font! SDL_ttf Error: %s\n", TTF_GetError() );
+	}
+
+
+    // Render the text
+    SDL_Color textColor = { 255, 255, 255}; 
+	CreateTextureFromString("Disconnected", textColor, &DisconnectedStatusTexture, &DisconnectedStatusSurface);
+	CreateTextureFromString("Connected", textColor, &ConnectedStatusTexture, &ConnectedStatusSurface);
+	CreateTextureFromString("In end screen", textColor, &inEndStatusTexture, &inEndStatusSurface);
+    CreateTextureFromString("Wants new game", textColor, &WantNewStatusTexture, &WantNewStatusSurface);
+	CreateTextureFromString("Player 1:", textColor, &Player1Texture, &Player1Surface);
+	CreateTextureFromString("Player 2:", textColor, &Player2Texture, &Player2Surface);
+
+    // Create the victory and defeat screens
+    SDL_Surface* surface;
+    surface = SDL_CreateRGBSurface(0, width, height, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
+
+    SDL_FillRect(surface, NULL, SDL_MapRGB(surface->format, 255, 255, 0));
+    victoryTexture = SDL_CreateTextureFromSurface(rend, surface);
+    
+    SDL_FillRect(surface, NULL, SDL_MapRGB(surface->format, 0, 255, 255));
+    defeatTexture = SDL_CreateTextureFromSurface(rend, surface);
+
+
+    // Create the white mask
+    SDL_FillRect(surface, NULL, SDL_MapRGB(surface->format, 255, 255, 255));
+    whiteMaskTexture = SDL_CreateTextureFromSurface(rend, surface);
+
+
+    // Create the paddles
+    int paddle_width = 100;
+    int paddle_height = 20;
+    surface = SDL_CreateRGBSurface(0, paddle_width, paddle_height, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
+    SDL_FillRect(surface, NULL, SDL_MapRGBA(surface->format, 0, 255, 0, 255));
+    paddle1Texture = SDL_CreateTextureFromSurface(rend, surface);
+
+    SDL_FreeSurface(surface);
 
 }
 
@@ -49,59 +117,180 @@ void graphics::finalize(){
     delete [] buffer_potential;
     delete [] buffer_wavefunction;
 
-    SDL_DestroyTexture(tex);
+    SDL_DestroyTexture(wavefunctionTexture);
+
+    SDL_DestroyTexture(DisconnectedStatusTexture);
+    SDL_DestroyTexture(ConnectedStatusTexture);
+    SDL_DestroyTexture(inEndStatusTexture);
+    SDL_DestroyTexture(Player1Texture);
+    SDL_DestroyTexture(Player2Texture);
+    SDL_DestroyTexture(placeholderTexture);
+    SDL_DestroyTexture(victoryTexture);
+    SDL_DestroyTexture(defeatTexture);
+    SDL_DestroyTexture(whiteMaskTexture);
+
+    SDL_FreeSurface(DisconnectedStatusSurface);
+    SDL_FreeSurface(ConnectedStatusSurface);
+    SDL_FreeSurface(inEndStatusSurface);
+    SDL_FreeSurface(Player1Surface);
+    SDL_FreeSurface(Player2Surface);
+    SDL_FreeSurface(placeholderSurface);
+
+	TTF_CloseFont(gFont);
+	gFont = NULL;
+
     SDL_DestroyRenderer(rend);
     SDL_DestroyWindow(win);
-    SDL_Quit();
+    TTF_Quit();
+    SDL_Quit();	
 };
 
-void graphics::set_screen(unsigned red, unsigned green, unsigned blue){
+
+
+
+void graphics::update_lobby(int p1Status, int p2Status){
+    std::cout << "graphics::set_screen\n" << std::flush;
+
+
+
+
+    int y = 350;
+    int x = 20;
+    int fontHSpacing = 30;
+
+    SDL_Rect rect;
+    rect.x = x;
+    rect.y = y;
+    rect.w = Player1Surface->w;
+    rect.h = Player1Surface->h;
+
 
     SDL_RenderClear(rend);
-    int pitch;
-    SDL_LockTexture(tex, NULL,  (void **)&buffer_pixels, &pitch);
 
-    // Colormap
-    for(unsigned i=0; i < height; i++){
-        for(unsigned j=0; j < width; j++){
-            unsigned n = (i*width + j);
-            
-            // ARGB
-            //buffer[n+2] = m*40; // G
-            buffer_pixels[PIXEL_SIZE*n+1] = red;
-            buffer_pixels[PIXEL_SIZE*n+2] = green;
-            buffer_pixels[PIXEL_SIZE*n+3] = blue;
-        }
+    // Draw words
+    rect.w = Player1Surface->w;
+    SDL_RenderCopy( rend, Player1Texture, NULL, &rect);
+    
+    rect.w = Player2Surface->w;
+    rect.y = y + fontHSpacing*3;
+    SDL_RenderCopy( rend, Player2Texture, NULL, &rect);
+
+
+
+    // CHANGE: reuse the variables from PlayerStateMachine. maybe put them in macros.hpp
+    // Process player 1
+    switch(p1Status){
+        case 1: 
+            placeholderSurface = ConnectedStatusSurface;
+            placeholderTexture = ConnectedStatusTexture;
+            break;
+
+        case 2: 
+            placeholderSurface = WantNewStatusSurface;
+            placeholderTexture = WantNewStatusTexture;
+            break;
+
+        case 6: 
+            placeholderSurface = inEndStatusSurface;
+            placeholderTexture = inEndStatusTexture;
+            break;
+
+        default: 
+            placeholderSurface = DisconnectedStatusSurface;
+            placeholderTexture = DisconnectedStatusTexture;
+            break;
+
     }
 
+    rect.y = y + fontHSpacing;
+    rect.w = placeholderSurface->w;
+    rect.h = placeholderSurface->h;
+    SDL_RenderCopy( rend, placeholderTexture, NULL, &rect);
 
-    SDL_UnlockTexture(tex);
-    SDL_RenderCopy(rend, tex, NULL, NULL);
+
+
+
+    // Process player 2
+    switch(p2Status){
+        case 1: 
+            placeholderSurface = ConnectedStatusSurface;
+            placeholderTexture = ConnectedStatusTexture;
+            break;
+
+        case 2: 
+            placeholderSurface = WantNewStatusSurface;
+            placeholderTexture = WantNewStatusTexture;
+            break;
+
+        case 6: 
+            placeholderSurface = inEndStatusSurface;
+            placeholderTexture = inEndStatusTexture;
+            break;
+
+        default: 
+            placeholderSurface = DisconnectedStatusSurface;
+            placeholderTexture = DisconnectedStatusTexture;
+            break;
+
+    }
+
+    rect.y = y + 4*fontHSpacing;
+    rect.w = placeholderSurface->w;
+    rect.h = placeholderSurface->h;
+	SDL_RenderCopy( rend, placeholderTexture, NULL, &rect);
+
+
     SDL_RenderPresent(rend);
+
+
+}
+
+void graphics::endScreen(bool won){
+    std::cout << "graphics::endScreen\n" << std::flush;
+
+
+    SDL_RenderClear(rend);
+    if(won)
+	    SDL_RenderCopy( rend, victoryTexture, NULL, NULL);
+    if(!won)
+        SDL_RenderCopy( rend, defeatTexture, NULL, NULL);
+    SDL_RenderPresent(rend);
+
+
+}
+
+
+
+void graphics::update_wavefunction(uint8_t *buffer1){
+    std::cout << "graphics: entered update_wavefunction\n" << std::flush;
+    for(int i=0; i<width*height; i++) buffer_wavefunction[i] = (int)buffer1[i];
+    std::cout << "graphics: left update_wavefunction\n" << std::flush;
 }
 
 void graphics::draw_wavefunction(){
 
+    int pitch;
+    // A função SDL_LocKTexture aloca a memoria interiormente!! não pode ser estática
+    SDL_LockTexture(wavefunctionTexture, NULL,  (void **)&buffer_pixels_wavefunction, &pitch);
+
     for(unsigned i=0; i < height; i++){
         for(unsigned j=0; j < width; j++){
             unsigned n = (i*width + j);
             
             // ARGB
-            buffer_pixels[PIXEL_SIZE*n+0] = 0; // A
-            buffer_pixels[PIXEL_SIZE*n+1] = 0; // R
-            buffer_pixels[PIXEL_SIZE*n+2] = buffer_wavefunction[n]; // G
-            buffer_pixels[PIXEL_SIZE*n+3] = 0; // B
+            buffer_pixels_wavefunction[PIXEL_SIZE*n+0] = 0; // A
+            buffer_pixels_wavefunction[PIXEL_SIZE*n+1] = 0; // R
+            buffer_pixels_wavefunction[PIXEL_SIZE*n+2] = buffer_wavefunction[n]; // G
+            buffer_pixels_wavefunction[PIXEL_SIZE*n+3] = 0; // B
         }
     }
+
+    SDL_UnlockTexture(wavefunctionTexture);
+    SDL_RenderCopy(rend, wavefunctionTexture, NULL, NULL);
 }
 
-void graphics::update_wavefunction(uint8_t *buffer1){
-    std::cout << "graphics: entered update_wavefunction\n" << std::flush;
 
-    for(int i=0; i<width*height; i++) buffer_wavefunction[i] = (int)buffer1[i];
 
-    std::cout << "graphics: left update_wavefunction\n" << std::flush;
-}
 
 void graphics::update_potential(int x, int y, int dx, int dy, uint8_t *buffer1){
 
@@ -125,6 +314,10 @@ void graphics::update_potential(int x, int y, int dx, int dy, uint8_t *buffer1){
 void graphics::draw_potential(){
     std::cout << "graphics: entered draw_potential\n" << std::flush;
 
+    int pitch;
+    // A função SDL_LocKTexture aloca a memoria interiormente!! não pode ser estática
+    SDL_LockTexture(potTexture, NULL,  (void **)&buffer_pixels_potential, &pitch);
+
     for(unsigned i=0; i < height; i++){
         for(unsigned j=0; j < width; j++){
             unsigned n = (i*width + j);
@@ -133,63 +326,66 @@ void graphics::draw_potential(){
             // buffer_pixels[PIXEL_SIZE*n+0] = 0; // A
             // buffer_pixels[PIXEL_SIZE*n+1] += 0; // R
             // buffer_pixels[PIXEL_SIZE*n+2] += 0; // G
-            buffer_pixels[PIXEL_SIZE*n+3] += buffer_potential[n]; // B
+            buffer_pixels_potential[PIXEL_SIZE*n+3] += buffer_potential[n]; // B
         }
     }
     std::cout << "graphics: left draw_potential\n" << std::flush;
+
+    SDL_UnlockTexture(potTexture);
+    SDL_RenderCopy(rend, potTexture, NULL, NULL);
 }
 
-void graphics::draw_paddle(int x, int y, int R, int G, int B){
+
+
+
+
+void graphics::draw_paddle(int x, int y, SDL_Texture* texture){
     std::cout << "graphics: entered draw_paddle\n" << std::flush;
 
     int paddle_width = 100;
     int paddle_height = 20;
-    int xmin = x - paddle_width/2;
-    int xmax = x + paddle_width/2;
+    
+    
+    //Render texture to screen
+    SDL_Rect srcrect;
+    SDL_Rect dstrect;
 
-    int ymin = y - paddle_height/2;
-    int ymax = y + paddle_height/2;
+    // Image that we want to blit
+    srcrect.x = 0;
+    srcrect.y = 0;
+    srcrect.w = paddle_width;
+    srcrect.h = paddle_height;
 
+    dstrect.x = x - paddle_width/2;;
+    dstrect.y = y - paddle_height/2;;
+    dstrect.w = paddle_width;
+    dstrect.h = paddle_height;
 
-    for(int j = xmin; j < xmax; j++){
-        for(int i = ymin; i < ymax; i++){
-            unsigned n = (i*width + j);
-            
-            // ARGB
-            buffer_pixels[PIXEL_SIZE*n+0]  = 0; // A
-            buffer_pixels[PIXEL_SIZE*n+1] += R;
-            buffer_pixels[PIXEL_SIZE*n+2] += G;
-            buffer_pixels[PIXEL_SIZE*n+3] += B;
-        }
-    }
     std::cout << "graphics: left draw_paddle\n" << std::flush;
+    SDL_RenderCopy(rend, texture, &srcrect, &dstrect);
 }
 
 
 void graphics::update(){
     std::cout << "graphics: entered update\n" << std::flush;
 
-    //std::cout << "Updating graphics. 1\n" << std::flush;
     SDL_RenderClear(rend);
-    //std::cout << "Updating graphics. 1.5\n" << std::flush;
-    int pitch;
-    // A função SDL_LocKTexture aloca a memoria interiormente!! não pode ser estática
-    SDL_LockTexture(tex, NULL,  (void **)&buffer_pixels, &pitch);
-
+    
+    // updates wavefunction and potential textures
+    SDL_SetTextureAlphaMod( wavefunctionTexture,alpha );
     draw_wavefunction();
-    draw_potential();
-    // std::cout << "paddles: " << x0 << " " << y0 << " " << x1 << " " << y1 << "\n";
-    draw_paddle(x0, y0, 50,50,0);
-    draw_paddle(x1, y1, 0,50,50);
 
+    SDL_SetTextureAlphaMod( whiteMaskTexture, 255-alpha );
+    SDL_RenderCopy(rend, whiteMaskTexture, NULL, NULL);
 
-    //std::cout << "Updating graphics. 3\n" << std::flush;
-    SDL_UnlockTexture(tex);
-    SDL_RenderCopy(rend, tex, NULL, NULL);
+    // draw_potential();
+    
+    // draw_paddle(x0, y0, paddle1Texture);
+    // draw_paddle(x1, y1, paddle2Texture);
+
+    
     SDL_RenderPresent(rend);
-    //SDL_Delay(1000 / 1);
-    //std::cout << "Updating graphics 4\n. " << std::flush;
-
+    
     std::cout << "graphics: left update\n" << std::flush;
 }
 
@@ -269,6 +465,24 @@ bool graphics::get_one_SDL_event(){
                         std::cout << " pressed d\n";
                         buffer_SDL[0] = EV_PRESSED_KEY;
                         buffer_SDL[1] = KEY_d;
+                        break;
+                        
+                    case SDLK_n:
+                        std::cout << " pressed n\n";
+                        buffer_SDL[0] = EV_PRESSED_KEY;
+                        buffer_SDL[1] = KEY_n;
+                        break;
+
+                    case SDLK_ESCAPE:
+                        std::cout << " pressed ESCAPE\n";
+                        buffer_SDL[0] = EV_PRESSED_KEY;
+                        buffer_SDL[1] = KEY_esc;
+                        break;
+
+                    case SDLK_RETURN:
+                        std::cout << " pressed RETURN\n";
+                        buffer_SDL[0] = EV_PRESSED_KEY;
+                        buffer_SDL[1] = KEY_return;
                         break;
 
                     default:

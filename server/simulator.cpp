@@ -118,7 +118,7 @@ void simulator::init_buffers(){
 
     potential_changed = false;
     absorb_on = true;
-    running = true;
+    // running = true;
     modifier = 1.0;
 
 
@@ -565,9 +565,26 @@ void simulator::reset_state(){
     delete[] score;
 
     absorb_on = true;
-    running = true;
+    // running = true;
+    paused = true;
     modifier = 1.0;
     radB = 200;
+
+    unsigned ix = Lx/2;
+    unsigned iy = Ly/2;
+    float kx = 0.5;
+    float ky = 1.0;
+    float broad = 20.0;
+    int paddle_x = 100;
+    int paddle_y_bot = 50;
+    int paddle_y_top = Ly-50;
+    int paddle_width = 100;
+    int paddle_height = 20;
+
+    set_H();
+    initialize_wf(ix, iy, kx, ky, broad);
+    init_paddles(paddle_x, paddle_y_top, paddle_x, paddle_y_bot, paddle_width, paddle_height);
+    update_paddles(paddle_x, paddle_y_top, paddle_x, paddle_y_bot);
 
 }
 
@@ -1022,7 +1039,7 @@ void simulator::init(unsigned Lx, unsigned Ly, int delay){
     unsigned local = 2;
 
     // Time evolution operator parameters
-    float dt = 2.0/10;
+    float dt = 2.0;
     unsigned Ncheb = 10;
 
     // initial wavefunction parameters: center, momentum, spread
@@ -1064,30 +1081,26 @@ void simulator::loop(){
     auto start = std::chrono::system_clock::now();
 
     // CHANGE: Replace this with while true
+    bool processed_event = false;
     for(unsigned j=0; j<Ntimes; j++){
         
         // CHANGE: the colormap will be implemented client-side. This function can be replaced
         get_norm(&max, &threshhold);
 
-        if(norm_top > 0.5){
-            // eq->add_event(EV_PLAYER_WON, 0);
-        // if(engine.norm_top > 0.5 || engine.win){
-            // usleep(1000*1000);
-            // visual.set_victory_screen(0);
-            // if(j%10==0) std::cout << "Top player won! Press R to reset.\n";
+        if(norm_top > 0.5 && !processed_event){
+            eq->add_event(Event<EV_PLAYER_WON>(0).buffer_b);
+            processed_event = true;
 
-        } else if(norm_bot > 0.5){
-            // eq->add_event(EV_PLAYER_WON, 1);
-        //} else if(engine.norm_bot > 0.5 || engine.win){
-            // usleep(1000*1000);
-            // visual.set_victory_screen(1);
-            // if(j%10==0) std::cout << "Bottom player won! Press R to reset.\n";
+        } else if(norm_bot > 0.5 && !processed_event){
+            eq->add_event(Event<EV_PLAYER_WON>(1).buffer_b);
+            processed_event = true;
+
         } else {
             
             // set_max(threshhold);
             
             // if(engine.pressed_showcase) engine.clear_wf_away_from_pot(visual.image->data, visual.width, visual.height);
-            if(!*paused){
+            if(!paused){
                 
                 iterate_time(3);
 
@@ -1095,7 +1108,7 @@ void simulator::loop(){
                 // colormap will be done client-side
                 update_pixel();
             }
-            // if(absorb_on) absorb();
+            if(absorb_on) absorb();
 
             
         }
