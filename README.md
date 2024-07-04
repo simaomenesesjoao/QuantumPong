@@ -2,20 +2,24 @@
 A quantum version of the classic Pong game. Each user controls a paddle and bounces the electron wavefunction around until it diffracts away! The top and bottom edges absorb the wavefunction. A player loses when more than 50% of the original wavefunction has been absorbed on their side. Youtube video showing how it looks like: https://www.youtube.com/shorts/oA7VtZ_YcGI
 
 ## Controls
-The top player controls the paddle using the ASDW keys
-The bottom player controls the paddle using the JKLI keys
-The colormap can be changed by pressing the number 1 to make it brighter and 2 to makeit darker.
-Pressing R resets the game.
-Clicking with the mouse anywhere on the screen creates a potential barrier in that spot (invisible)
+Lobby:
+- Press N to set/unset ready. The game will start once both players are ready
+
+Ingame:
+- Use the WASD keys to move the paddle around
+- Clicking with the mouse anywhere on the screen creates a potential barrier circle in that spot
+- Pressing Space pauses the game. To resume, set/unset ready by pressing space again
+
+End screen:
+- Press Return to return to the lobby
 
 ## Installation
-This is a preliminary version of the game and requires OpenCL GPU acceleration to run. For now, it can only run on Linux with X11 (no Wayland support yet).
+This is a preliminary version of the game and requires OpenCL GPU acceleration to run. SDL2 is used for the client-side graphics.
 
 ## Technical details
 This game is simulated on a discretized version of the Schrodinger equation in 2D space. The equation is solved by computing the time evolution operator with a Chebyshev decomposition.
 
 ## Wish list
 Support for more platforms<br>
-OpenCL/OpenGL integration<br>
-Make it event driven<br>
+More physical systems (spin effects, sublattice effects)<br>
 Make the window dimensions independent of the simulation dimensions<br>
