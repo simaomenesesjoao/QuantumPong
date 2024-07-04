@@ -2,7 +2,6 @@
 #include <unistd.h>
 #include <semaphore.h>
 #include <mutex>
-#include <netinet/in.h>
 #include <iostream>
 #include "../macros.hpp"
 #include "../event_queue.hpp"
@@ -53,15 +52,15 @@ void connection_handler::process_connections(){
 
     while(accepting_connections){
 
-        std::cout << "listening to connections. " << std::flush;
-        std::cout << "connection status: " << connection_status[0] << " " << connection_status[1] << "\n" << std::flush;
+        std::cout << "connection_handler: listening to connections. " << std::flush;
+        std::cout << "connection_handler: connection status: " << connection_status[0] << " " << connection_status[1] << "\n" << std::flush;
         if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
             perror("accept");
             exit(EXIT_FAILURE);
         }
 
 
-        std::cout << "new connection in socket" << new_socket << "\n" << std::flush;
+        std::cout << "connection_handler:new connection in socket" << new_socket << "\n" << std::flush;
 
         // Assign player number and update number of players
         int player_number;
@@ -83,5 +82,5 @@ void connection_handler::process_connections(){
 
     }
 
-    std::cout << "exited process_connections" << std::flush;
+    std::cout << "connection_handlerexited process_connections" << std::flush;
 }

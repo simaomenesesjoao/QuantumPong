@@ -1,3 +1,8 @@
+#ifndef CONNECTION_HANDLER_H
+#define CONNECTION_HANDLER_H 1
+
+#include "../event_queue.hpp"
+#include <netinet/in.h>
 
 class connection_handler {
     public:
@@ -17,3 +22,5 @@ class connection_handler {
     void process_connections();
     connection_handler(event_queue*);
 };
+
+#endif 

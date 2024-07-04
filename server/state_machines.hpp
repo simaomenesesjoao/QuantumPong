@@ -7,12 +7,14 @@
 #include "../event_queue.hpp"
 #include <unistd.h>
 #include "simulator.hpp"
+#include "connection_handler.hpp"
 
 class Server;
 
 class Player{
 public:
     event_queue *eventQueue;
+    connection_handler* connection;
     int playerNumber;
     int socket;
     std::vector<std::thread> threads;
@@ -32,7 +34,7 @@ public:
     Player *otherPlayer;
     Server *server;
 
-    Player(event_queue* eq, int pNum);
+    Player(event_queue*, connection_handler*, int pNum);
     ~Player();
     void addOtherPlayer(Player *player);   
     void addServer(Server *serv);
@@ -41,6 +43,11 @@ public:
     void listener();
     void sender(uint8_t*, unsigned);
 
+    
+    void onSend_Pot(uint8_t*);
+
+    void ProcessDisconnection(uint8_t*);
+    void PlayerDisconnectedOnEntry();
     void PlayerDisconnectedHandler(uint8_t* data);
 
     void PlayerIdleOnEntry();
@@ -76,11 +83,12 @@ public:
     std::string stateStrings[10];
 
     Player *player1, *player2;
-    
+
     Server(event_queue* eq);
     void addPlayers(Player *p1, Player *p2);
     void handle(uint8_t*);
     void addSimulator(simulator*);
+    void processPressedKey(uint8_t*);
 
     void GameOffOnEntry();
     void GameOffHandler(uint8_t*);

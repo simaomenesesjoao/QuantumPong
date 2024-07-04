@@ -31,22 +31,27 @@ void on_unpause_game(shared_memory *memory, client *cl, graphics *gr, uint8_t *d
     gr->update();
 }
 
-
-
 void on_end_screen(shared_memory *memory, client *cl, graphics *gr, uint8_t *data){
     std::cout << "on_end_screen\n";
 
     Event<EV_END_SCREEN> event(data);
     gr->endScreen(event.player_number == cl->player_number);
+    gr->reset_potential();
+    gr->reset_wavefunction();
+    gr->score_top = 0;
+    gr->score_bot = 0;
+
+
     
 }
 
 
 void on_update_status(shared_memory *memory, client *cl, graphics *gr, uint8_t *data){
-    std::cout << "on_change_screen\n";
+    std::cout << "on_update_status\n";
 
     Event<EV_UPDATE_STATUS> event(data);
     int player_number = event.player_number;
+    std::cout << "statuses: " << event.state_p1 << " " << event.state_p2 << "\n";
     
     gr->update_lobby(event.state_p1, event.state_p2);
 }
@@ -56,23 +61,41 @@ void on_send_init_info(shared_memory *memory, client *cl, graphics *gr, uint8_t 
     
     Event<EV_SEND_INIT_INFO> event(data);
     cl->player_number = event.player_number;
+    gr->initAfterPlayerNumber(event.player_number);
        
     std::cout << "on_send_init_info. player number is: " << cl->player_number << "\n";
 }
 
 void on_stream(shared_memory *memory, client *cl, graphics *gr, uint8_t *data){
     Event<EV_STREAM> event(data);
-    
-    // gr->x0 = event.x0;
-    // gr->y0 = event.y0;
-    // gr->x1 = event.x1;
-    // gr->y1 = event.y1;
 
+    
     // std::cout << "paddles: " << memory->x0 << " " << memory->y0 << " " << memory->x1 << " " << memory->y1 << "\n";
     gr->update_wavefunction(cl->buffer_receive);
     gr->update();
+    gr->score_top = event.score_top;
+    gr->score_bot = event.score_bot;
+
+    std::cout << "score: " << gr->score_top << " " << gr->score_bot << "\n";
 }
 
+
+void on_paddle_update(shared_memory *memory, client *cl, graphics *gr, uint8_t *data){
+    Event<EV_PADDLE_UPDATE> event(data);
+    int player = event.player_number;
+
+    std::cout << "on_paddle_update: " << player << " " << event.x << " " << event.y << "\n";
+    if(player == 0){
+        gr->x0 = event.x;
+        gr->y0 = event.y;
+    }
+    if(player == 1){
+        gr->x1 = event.x;
+        gr->y1 = event.y;
+    }
+
+    gr->update();
+}
 
 void on_send_pot(shared_memory *memory, client *cl, graphics *gr, uint8_t *data){
     std::cout << "main: entered on_send_pot\n" << std::flush;
@@ -88,8 +111,6 @@ void on_send_pot(shared_memory *memory, client *cl, graphics *gr, uint8_t *data)
     gr->y0 = event.y0;
     gr->x1 = event.x1;
     gr->y1 = event.y1;
-    // uint8_t *buffer;
-
 
     // std::cout << "x,y,dx,dy:" << x << " " << y << " " << dx << " " << dy <<"\n";
     // std::cout << "paddles: " << event.x0 << " " << event.y0 << " " << event.x1 << " " << event.y1 << "\n";
@@ -158,8 +179,11 @@ int main(){
     while(!cl.close) {
 
         // Attempt to connect
-        if(connection_status == -1)
+        if(connection_status == -1){
             connection_status = cl.connect_to_server();
+            continue;
+        }
+        
 
         // Check if SDL has events
         bool SDL_has_data = gr.get_one_SDL_event(); 
@@ -204,11 +228,10 @@ int main(){
             if(event == EV_END_SCREEN) on_end_screen(&memory, &cl, &gr, cl.buffer_header);
             if(event == EV_STREAM) on_stream(&memory, &cl, &gr, cl.buffer_header);
             if(event == EV_SEND_POT) on_send_pot(&memory, &cl, &gr, cl.buffer_header);
-
-
+            if(event == EV_PADDLE_UPDATE) on_paddle_update(&memory, &cl, &gr, cl.buffer_header);
+            
             if(event == EV_PAUSE_GAME) on_pause_game(&memory, &cl, &gr, cl.buffer_header);
             if(event == EV_UNPAUSE_GAME) on_unpause_game(&memory, &cl, &gr, cl.buffer_header);
-
 
             cl.socket_has_data = false;
             sem_post(&cl.semaphore1);

@@ -21,7 +21,15 @@
 #define EV_PAUSE_GAME 14
 #define EV_UNPAUSE_GAME 15
 #define EV_END_SCREEN 16
+#define EV_PADDLE_UPDATE 17
 
+// Player colors
+#define P1R 255
+#define P1G 160
+#define P1B 0
+#define P2R 0
+#define P2G 100
+#define P2B 255
 
 // Variables
 #define PAYLOAD_OFF 0

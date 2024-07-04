@@ -16,7 +16,7 @@ class simulator {
 
     uint8_t *buffer_f, *buffer;
     unsigned buffer_size, buffer_f_size;
-
+    bool processed_victory;
 
     bool showcase, pressed_showcase;
     //private:
@@ -72,7 +72,7 @@ class simulator {
     void init_geometry(unsigned Lx, unsigned Ly, unsigned pad, unsigned local);
     void init_window(unsigned width, unsigned height);
     void set_hamiltonian_sq();
-    void set_local_pot(unsigned, unsigned, unsigned, unsigned, float);
+    void set_local_pot(int, int, unsigned, unsigned, float);
     void set_local_B(unsigned, unsigned, float);
 
     void initialize_pot_from();
@@ -93,7 +93,7 @@ class simulator {
 
     void init_paddles(int, int, int, int, int, int);
     void reset_state();
-    void update_paddles(int, int, int, int);
+    void update_paddles(int, int, int, int, int);
     
 };
 

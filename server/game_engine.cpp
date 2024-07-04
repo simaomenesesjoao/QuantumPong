@@ -16,31 +16,29 @@
 game_engine::game_engine(){}
 
 void game_engine::game_loop(){
-    delay_event_loop = 25*1000; 
+    delay_event_loop = 5*1000; 
     delay_streamer = 80*1000;
     int delay_simulation = 25*1000;
 
     int event = -1;
     uint8_t *data;
 
-    event_queue eventQueue(30);
+    event_queue eventQueue(300);
 
     connection_handler conn(&eventQueue);
     conn.init(8080);
-    // connection_status = conn.connection_status;
+    // CHANGE: dar erro quando porta não estiver disponivel. caso contrário, dá problemas chatos..
 
     unsigned Lx = 300;
     unsigned Ly = 700;
     simulator engine(&eventQueue);
     engine.init(Lx, Ly, delay_simulation);
-    // engine.paused = &paused;
-    // physics = &engine;
-    
+
     threads.push_back(std::thread(&connection_handler::process_connections, &conn));
     threads.push_back(std::thread(&simulator::loop, &engine));
 
     // Create player and server instances, and pass the pointers
-    Player player1(&eventQueue, 0), player2(&eventQueue, 1);
+    Player player1(&eventQueue, &conn, 0), player2(&eventQueue, &conn, 1);
     Server server(&eventQueue);
     
     player1.addOtherPlayer(&player2);
@@ -71,7 +69,6 @@ void game_engine::game_loop(){
             thread.join();
         }
     }
-    // t3.join();
 
     engine.finalize();
 

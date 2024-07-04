@@ -16,16 +16,28 @@ class graphics {
 
 
 
+        // Text textures
         SDL_Texture *DisconnectedStatusTexture, *ConnectedStatusTexture, *inEndStatusTexture, *WantNewStatusTexture;
         SDL_Surface *DisconnectedStatusSurface, *ConnectedStatusSurface, *inEndStatusSurface, *WantNewStatusSurface;
 
         SDL_Texture *Player1Texture, *Player2Texture, *placeholderTexture;
         SDL_Surface *Player1Surface, *Player2Surface, *placeholderSurface;
+        SDL_Texture *victoryTextTexture, *defeatTextTexture;
+        SDL_Surface *victoryTextSurface, *defeatTextSurface;
+
 
         SDL_Texture *paddle1Texture, *paddle2Texture;
         SDL_Texture *victoryTexture, *defeatTexture;
 
+
+
         SDL_Texture *whiteMaskTexture;
+
+        SDL_Texture *scoreBarTexture;
+
+
+        unsigned window_height, window_width;
+        unsigned score_width = 20;
 
         unsigned width, height;
         unsigned Nbytes;
@@ -38,20 +50,29 @@ class graphics {
 
         int x0, y0, x1, y1;
 
+        float score_top=0, score_bot=0;
+
         unsigned PIXEL_SIZE;
         shared_memory *memory;
 
     graphics(shared_memory*);
     void init(unsigned, unsigned);
+    void initAfterPlayerNumber(int);
     void finalize();
     void CreateTextureFromString(std::string , SDL_Color , SDL_Texture **, SDL_Surface **);
     
     bool get_one_SDL_event();
 
-    void draw_wavefunction();
+    void reset_potential();
     void draw_potential();
     void update_potential(int, int, int, int, uint8_t*);
+
+    void reset_wavefunction();
+    void draw_wavefunction();
     void update_wavefunction(uint8_t*);
+    
+    void draw_score();
+
     void draw_paddle(int, int, SDL_Texture*);
     void update();
 

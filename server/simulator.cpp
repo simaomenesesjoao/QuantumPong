@@ -301,8 +301,8 @@ void simulator::init_paddles(int pt_x, int pt_y, int pb_x, int pb_y, int paddle_
     paddle_height = paddle_h;
 }
 
-void simulator::update_paddles(int pt_x, int pt_y, int pb_x, int pb_y){
-    // std::cout << "Entered update_paddles\n" << std::flush;
+void simulator::update_paddles(int pt_x, int pt_y, int pb_x, int pb_y, int pnum){
+    // std::cout << "simulator: Entered update_paddles\n" << std::flush;
     // Update the values of the paddle position
 
     cl::NDRange offset;
@@ -340,16 +340,15 @@ void simulator::update_paddles(int pt_x, int pt_y, int pb_x, int pb_y){
     if(pb_y > Ly-paddle_height/2) bot_player_y = Ly-paddle_height/2;
 
     // Use the event class to convert the data into the buffer
-    
-    Event<EV_STREAM> event(N, top_player_x, top_player_y, bot_player_x, bot_player_y);
+    Event<EV_STREAM> event(N, top_player_x, top_player_y, bot_player_x, bot_player_y, norm_top, norm_bot);
+    // std::cout << "norms:" << norm_top << " " << norm_bot << "\n";
 
-
-    std::cout << "simulator - update_paddles: buffer_f\n";
+    // std::cout << "simulator - update_paddles: buffer_f\n";
     for(unsigned i=0; i<HEADER_LEN; i++){
         buffer_f[i] = event.buffer_b[i];
-        std::cout << (int)buffer_f[i] << " ";
+        // std::cout << (int)buffer_f[i] << " ";
     }
-    std::cout << "\n";
+    // std::cout << "\n";
 
     global_size = cl::NDRange{(cl::size_type)paddle_width, (cl::size_type)paddle_height};
     local_size  = cl::NDRange{(cl::size_type)local, (cl::size_type)local};
@@ -389,29 +388,44 @@ void simulator::update_paddles(int pt_x, int pt_y, int pb_x, int pb_y){
     queue.enqueueReadBuffer(changed_buf, CL_TRUE, 0, sizeof(bool), &potential_changed);
     if(potential_changed){
         queue.enqueueWriteBuffer(changed_buf, CL_TRUE, 0, sizeof(bool), &potential_changed);
-        std::cout << "CHANGED POTENTIAL\n";
+        std::cout << "paddles: CHANGED POTENTIAL\n";
         int dd = 10;
         int x0 = paddle_width/2;
         int y0 = paddle_height/2;
 
         int dx = paddle_width;
         int dy = paddle_height;
+        int xb, yb;
+        if(pnum==1){
+            xb = bot_player_prev_x;
+            if(bot_player_x  < bot_player_prev_x) xb  = bot_player_x;
+            if(bot_player_x != bot_player_prev_x) dx += dd;
 
-        int xb = bot_player_prev_x;
-        if(bot_player_x  < bot_player_prev_x) xb  = bot_player_x;
-        if(bot_player_x != bot_player_prev_x) dx += dd;
+            yb = bot_player_prev_y;
+            if(bot_player_y  < bot_player_prev_y) yb  = bot_player_y;
+            if(bot_player_y != bot_player_prev_y) dy += dd;
 
-        int yb = bot_player_prev_y;
-        if(bot_player_y  < bot_player_prev_y) yb  = bot_player_y;
-        if(bot_player_y != bot_player_prev_y) dy += dd;
+            Event<EV_SEND_POT> event1(xb-x0, yb-y0, dx, dy,
+            top_player_x, top_player_y, bot_player_x, bot_player_y);        
+            eq->add_event(event1.buffer_b);
+        }
 
-        Event<EV_SEND_POT> event1(xb-x0, yb-y0, dx, dy,
-         top_player_x, top_player_y, bot_player_x, bot_player_y);
-        // Event<EV_SEND_POT> event2(top_player_x-x0, top_player_y-y0, paddle_width, paddle_height);
-        // Event<EV_STREAM> event(N, top_player_x, top_player_y, bot_player_x, bot_player_y);
-        
-        eq->add_event(event1.buffer_b);
-        // eq->add_event(event2.buffer_b);
+        // Repeat for the other paddle
+        if(pnum==0){
+            dx = paddle_width;
+            dy = paddle_height;
+            xb = top_player_prev_x;
+            if(top_player_x  < top_player_prev_x) xb  = top_player_x;
+            if(top_player_x != top_player_prev_x) dx += dd;
+
+            yb = top_player_prev_y;
+            if(top_player_y  < top_player_prev_y) yb  = top_player_y;
+            if(top_player_y != top_player_prev_y) dy += dd;
+
+            Event<EV_SEND_POT> event2(xb-x0, yb-y0, dx, dy,
+            top_player_x, top_player_y, bot_player_x, bot_player_y);        
+            eq->add_event(event2.buffer_b);
+        }
     }
 
     potential_changed = false;
@@ -442,7 +456,7 @@ void simulator::set_local_B(unsigned x, unsigned y, float v){
     queue.enqueueNDRangeKernel(set_sq_B, offset, global_size, local_size);
 }
 
-void simulator::set_local_pot(unsigned x, unsigned y, unsigned dx, unsigned dy, float v){
+void simulator::set_local_pot(int x, int y, unsigned dx, unsigned dy, float v){
     std::cout << "simulator: set_local_pot:\n";
 
     cl::NDRange offset;
@@ -464,7 +478,7 @@ void simulator::set_local_pot(unsigned x, unsigned y, unsigned dx, unsigned dy, 
     local_size  = cl::NDRange{(cl::size_type)(local), (cl::size_type)(local)};
     queue.enqueueNDRangeKernel(set_sq_B, offset, global_size, local_size);
 
-     // CHANGE: Does the GPU finish the previous instructions before this runs?
+    // CHANGE: Does the GPU finish the previous instructions before this runs?
     queue.enqueueReadBuffer(changed_buf, CL_TRUE, 0, sizeof(bool), &potential_changed);
     if(potential_changed){
         potential_changed = false;
@@ -553,6 +567,7 @@ void simulator::clear_wf_away_from_pot(char *data, unsigned vis_width, unsigned 
 }
 
 void simulator::reset_state(){
+    std::cout << "simulator: reset_state\n";
 
     // Initialize score to zero
     float  *score = new float[Ncells];
@@ -565,7 +580,6 @@ void simulator::reset_state(){
     delete[] score;
 
     absorb_on = true;
-    // running = true;
     paused = true;
     modifier = 1.0;
     radB = 200;
@@ -580,11 +594,15 @@ void simulator::reset_state(){
     int paddle_y_top = Ly-50;
     int paddle_width = 100;
     int paddle_height = 20;
+    processed_victory = false;
 
+
+    norm_bot = 0;
+    norm_top = 0;
     set_H();
     initialize_wf(ix, iy, kx, ky, broad);
     init_paddles(paddle_x, paddle_y_top, paddle_x, paddle_y_bot, paddle_width, paddle_height);
-    update_paddles(paddle_x, paddle_y_top, paddle_x, paddle_y_bot);
+    update_paddles(paddle_x, paddle_y_top, paddle_x, paddle_y_bot, 0);
 
 }
 
@@ -771,6 +789,25 @@ float simulator::get_norm(float *maximum, float *threshhold){
         }
     }
 
+    // Event<EV_STREAM> event(buffer_f);
+    // event.score_bot = norm_bot;
+    // event.score_top = norm_top;
+    // std::cout << "norms:" << norm_top << " " << norm_bot << "\n";
+
+
+    // Use the event class to convert the data into the buffer
+    // CHANGE: Why can't I do like above and access the buffer directly?
+    Event<EV_STREAM> event(N, top_player_x, top_player_y, bot_player_x, bot_player_y, norm_top, norm_bot);
+    // std::cout << "norms:" << norm_top << " " << norm_bot << "\n";
+
+    // std::cout << "simulator - get_norm: buffer_f\n";
+    for(unsigned i=0; i<HEADER_LEN; i++){
+        buffer_f[i] = event.buffer_b[i];
+        // std::cout << (int)buffer_f[i] << " ";
+    }
+    // std::cout << "\n";
+
+
     // Get the histogram of wavefunction values 
     unsigned Nbins = 500;
     float *hist = new float[Nbins];
@@ -836,7 +873,7 @@ void simulator::get_pot(int x, int y, int dx, int dy, uint8_t *buffer){
 
     int4 *array = new int4[Npixels];
     queue.enqueueNDRangeKernel(colormapV,  offset, global_size, local_size);
-    queue.enqueueReadBuffer(   pix_buf, CL_TRUE, 0, sizeof(int4)*Npixels, array);
+    queue.enqueueReadBuffer(pix_buf, CL_TRUE, 0, sizeof(int4)*Npixels, array);
 
     int n;
     // for(int i=0; i<Lx; i++){
@@ -917,99 +954,7 @@ void simulator::update_pixel(){
 
 
 
-    // Get local potential
-    // offset      = cl::NDRange{(cl::size_type)(0), (cl::size_type)(0)};
-    // global_size = cl::NDRange{(cl::size_type)(Lx), (cl::size_type)(Ly)};
-    // local_size  = cl::NDRange{(cl::size_type)(local), (cl::size_type)(local)};
-
-    // queue.enqueueNDRangeKernel(colormapV,  offset, global_size, local_size);
-    // queue.enqueueReadBuffer(   pix_buf, CL_TRUE, 0, sizeof(int4)*Npixels, array);
-
-    // // Plot the potential
-    // if(!showcase)
-    // for(int r = 0; r < Ly; r++){
-    //     for(int c = 0; c < Lx; c++){
-    //         m = r*vis_width + c;
-    //         n = r*Lx + c;
-    //         data[4*m+0] = std::min(255, data[4*m+0] + array[n].x);
-    //     }
-    // }
     delete[] array;
-
-
-    // // Draw the paddles
-    // if(!showcase)
-    // for(int i=top_player_x-paddle_width/2; i<top_player_x+paddle_width/2; i++){
-    //     for(int j=top_player_y-paddle_height/2; j<top_player_y+paddle_height/2; j++){
-    //         m = j*vis_width + i;
-    //         data[4*m+0] = 0;
-    //         data[4*m+1] += 122;
-    //         data[4*m+2] = 255;
-
-    //     }
-    // }
-
-    // if(!showcase)
-    // for(int i=bot_player_x-paddle_width/2; i<bot_player_x+paddle_width/2; i++){
-    //     for(int j=bot_player_y-paddle_height/2; j<bot_player_y+paddle_height/2; j++){
-    //         m = j*vis_width + i;
-    //         data[4*m+0] = 255;
-    //         data[4*m+1] += 122;
-    //         data[4*m+2] = 0;
-    //     }
-    // }
-
-
-    // int pixels_top = (int)(norm_top*Ly);
-    // int pixels_bot = (int)(norm_bot*Ly);
-
-
-    // // Clean p
-    // for(int c = Lx; c < Lx + 30; c++){
-    //     for(int r = 0; r < Ly; r++){
-    //         m = r*vis_width + c;
-    //         data[4*m+0] = 50;
-    //         data[4*m+1] = 50;
-    //         data[4*m+2] = 50;
-    //         data[4*m+3] = 0;
-    //     }
-    // }
-
-    // for(int c = Lx; c < Lx + 30; c++){
-    //     for(int r = 0; r < pixels_bot; r++){
-    //         m = r*vis_width + c;
-    //         data[4*m+0] = 255;
-    //         data[4*m+1] = 122;
-    //         data[4*m+2] = 0;
-    //         data[4*m+3] = 0;
-    //     }
-
-    //     for(int r = Ly-pixels_top; r < Ly; r++){
-    //         m = r*vis_width + c;
-    //         n = r*Lx + c;
-    //         data[4*m+0] = 0;
-    //         data[4*m+1] = 122;
-    //         data[4*m+2] = 255;
-    //         data[4*m+3] = 0;
-    //     }
-
-    //     m = Ly/2*vis_width + c;
-    //     data[4*m+0] = 255;
-    //     data[4*m+1] = 255;
-    //     data[4*m+2] = 255;
-    //     data[4*m+3] = 0;
-    // }
-
-
-    // for(int r = 0; r < Ly; r++){
-    //     for(int c = 0; c < Lx; c++){
-    //         m = r*vis_width + c;
-
-    //         if(data[4*m+0]>255) data[4*m+0] = 255;
-    //         if(data[4*m+1]>255) data[4*m+1] = 255;
-    //         if(data[4*m+2]>255) data[4*m+2] = 255;
-    //     }
-    // }
 
 }
 
@@ -1068,7 +1013,7 @@ void simulator::init(unsigned Lx, unsigned Ly, int delay){
     int paddle_width = 100;
     int paddle_height = 20;
     init_paddles(paddle_x, paddle_y_top, paddle_x, paddle_y_bot, paddle_width, paddle_height);
-    update_paddles(paddle_x, paddle_y_top, paddle_x, paddle_y_bot);
+    update_paddles(paddle_x, paddle_y_top, paddle_x, paddle_y_bot, 0);
 }
 
 void simulator::loop(){
@@ -1081,23 +1026,26 @@ void simulator::loop(){
     auto start = std::chrono::system_clock::now();
 
     // CHANGE: Replace this with while true
-    bool processed_event = false;
+    processed_victory = false;
     for(unsigned j=0; j<Ntimes; j++){
         
-        // CHANGE: the colormap will be implemented client-side. This function can be replaced
-        get_norm(&max, &threshhold);
+        // CHANGE: the colormap will be implemented client-side. This function can be modified
+        if(j%4==0) // requires some processing
+            get_norm(&max, &threshhold);
 
-        if(norm_top > 0.5 && !processed_event){
-            eq->add_event(Event<EV_PLAYER_WON>(0).buffer_b);
-            processed_event = true;
-
-        } else if(norm_bot > 0.5 && !processed_event){
+        if(norm_top > 0.5 && !processed_victory){
             eq->add_event(Event<EV_PLAYER_WON>(1).buffer_b);
-            processed_event = true;
+            processed_victory = true;
+            reset_state();
+
+        } else if(norm_bot > 0.5 && !processed_victory){
+            eq->add_event(Event<EV_PLAYER_WON>(0).buffer_b);
+            processed_victory = true;
+            reset_state();
 
         } else {
             
-            // set_max(threshhold);
+            set_max(threshhold);
             
             // if(engine.pressed_showcase) engine.clear_wf_away_from_pot(visual.image->data, visual.width, visual.height);
             if(!paused){
@@ -1113,18 +1061,14 @@ void simulator::loop(){
             
         }
 
-        // visual.update();
-        //if(j%10==0){
-            //std::cout << "time, norm, max, norm_top, norm_bot: " << j << " " << norm << " " << max << " " << engine.norm_top << " " << engine.norm_bot << "\n";
-        //}
         auto end = std::chrono::system_clock::now();
         std::chrono::duration<double> elapsed_seconds = end-start;
         double elapsed_ms = elapsed_seconds.count()*1000;
-        // std::cout << "simulation time: " << elapsed_ms << "ms" << std::endl;
         
         if(elapsed_ms*1000 < delay_simulation){
             usleep(delay_simulation-elapsed_ms*1000);
         }
+
         start = std::chrono::system_clock::now();
     }
 }

@@ -1,5 +1,6 @@
 #include <iostream>
 #include <semaphore.h>
+#include <unistd.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <sys/socket.h>
@@ -45,6 +46,7 @@ int client::connect_to_server(){
 
     // Connect to server
     if(connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
+        std::cout << "connection failed\n" << std::flush;
         return -1;
     }
     connected = true;
@@ -83,6 +85,7 @@ bool client::read_one_from_server(){
     std::cout << "Entered read one from server in socket " << sock << "\n";
 
     while(true){
+        // usleep(100*1000);
         //std::cout << "loop read one\n";
         if(close) {
             std::cout << "Thread detected SDL closure\n";
@@ -90,7 +93,7 @@ bool client::read_one_from_server(){
         }
 
         if(!connected){
-            usleep(1000*1000);
+            usleep(100*1000);
             continue;
         }
         // std::cout << "loop read one connected\n";
@@ -117,9 +120,6 @@ bool client::read_one_from_server(){
         } else {
 
             // std::cout << "activity found on socket" << sock << " \n";
-            //if (FD_ISSET(sock, &readfds)) {
-                //std::cout << "activity in correct socket\n";
-            //}
             // dont think I need to check the socket if there was activity
 
             int bytesReceived = recv(sock, buffer_header, Nbytes_header*sizeof(uint8_t), MSG_WAITALL);
@@ -127,9 +127,10 @@ bool client::read_one_from_server(){
             Event<EV_GENERIC> event(buffer_header);
             int event_id = event.event_ID;
             int payload_size = event.payload_size;
-            std::cout << "received: " << bytesReceived << " from server event " << event_id << " payload:" << payload_size << "\n" << std::flush;
-
+            
+            // std::cout << "redceived: " << bytesReceived << " from server event " << event_id << " payload:" << payload_size << "\n" << std::flush;
             if(event_id != EV_STREAM){
+                std::cout << "received: " << bytesReceived << " from server event " << event_id << " payload:" << payload_size << "\n" << std::flush;
                 
            
                 for(unsigned i=0; i<10; i++){
@@ -164,11 +165,15 @@ bool client::read_one_from_server(){
                 }
             }
 
+            // std::cout << "before semaphore\n";
+
             
-
-
+            // If the game is closed, then the semaphore will no longer be updated, 
+            // so I need to return here
+            if(close) return 0;
             socket_has_data = true;
             sem_wait(&semaphore1);
+            // std::cout << "after semaphore\n";
         }
     }
 

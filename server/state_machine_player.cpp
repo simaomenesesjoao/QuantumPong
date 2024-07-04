@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 #include "../event_queue.hpp"
 #include <unistd.h>
+#include "connection_handler.hpp"
 #include "state_machines.hpp"
 
 
@@ -78,9 +79,11 @@ void Player::sender(uint8_t *data, unsigned length){
 
 
 
-Player::Player(event_queue* eq, int pNum){
+Player::Player(event_queue* eq, connection_handler* conn, int pNum){
     eventQueue = eq;
+    connection = conn;
     playerNumber = pNum;
+
     socket = -1;
     activeHandler = &Player::PlayerDisconnectedHandler;
     state = PlayerDisconnected;
@@ -110,7 +113,21 @@ void Player::handle(uint8_t* data){(this->*activeHandler)(data);}
 
 
 
+void Player::ProcessDisconnection(uint8_t* data){
+    Event<EV_GENERIC> evg(data);
+
     
+
+
+}
+
+void Player::PlayerDisconnectedOnEntry(){
+    state = PlayerDisconnected;
+    activeHandler = &Player::PlayerDisconnectedHandler;
+    connection->connection_status[playerNumber] = false;
+    socket = -1;
+
+}
 
 void Player::PlayerDisconnectedHandler(uint8_t* data){
     std::cout << "PlayerDisconnectedHandler " << playerNumber << "\n";
@@ -121,14 +138,16 @@ void Player::PlayerDisconnectedHandler(uint8_t* data){
         socket = ev.socket;
 
         activeHandler = &Player::PlayerIdleHandler;            
+        sender(Event<EV_SEND_INIT_INFO>(playerNumber).buffer_b, HEADER_LEN);
         PlayerIdleOnEntry();
         
         threads.push_back(std::thread(&Player::listener, this));
 
-        sender(Event<EV_SEND_INIT_INFO>(playerNumber).buffer_b, HEADER_LEN);
+        
         // sender(Event<EV_CHANGE_SCREEN>(playerNumber,0).buffer_b, HEADER_LEN);
                 
     }
+
 }
 
 
@@ -157,6 +176,18 @@ void Player::PlayerIdleHandler(uint8_t* data){
     if(evg.event_ID == EV_UPDATE_STATUS){
         sender(data, HEADER_LEN);
     }
+
+    // Check if a player disconnected
+    if(evg.event_ID == EV_DISCONNECT){
+
+        if(evg.player_number == playerNumber){
+            PlayerDisconnectedOnEntry();
+        } else {
+
+        }
+        eventQueue->add_event(Event<EV_UPDATE_STATUS>(playerNumber, state, otherPlayer->state).buffer_b);
+        
+    }
 }
 
 
@@ -166,13 +197,10 @@ void Player::PlayerWantNewOnEntry(){
     activeHandler = &Player::PlayerWantNewHandler;
 
 
-    // std::cout << "PlayerWantNewOnEntry " << playerNumber << "\n";
-    // std::cout << "mystate: " << state << " other state: " << otherPlayer->state << "\n";
-    
     // Check if both players are in the WantNew state. If not, update the lobby status
     if(otherPlayer->state == PlayerWantNew){
         std::cout << "Both players want to start\n ";
-        eventQueue->add_event(Event<EV_START_GAME>().buffer_b);
+        eventQueue->add_event(Event<EV_START_GAME>(-1).buffer_b);
     } else {
         eventQueue->add_event(Event<EV_UPDATE_STATUS>(playerNumber, state, otherPlayer->state).buffer_b);
     }
@@ -199,6 +227,89 @@ void Player::PlayerWantNewHandler(uint8_t* data){
     if(evg.event_ID == EV_UPDATE_STATUS){
         sender(data, HEADER_LEN);
     }
+
+    // Check if a player disconnected. Change state first, then update state
+    if(evg.event_ID == EV_DISCONNECT){
+        
+        if(evg.player_number == playerNumber){
+            PlayerDisconnectedOnEntry();
+            
+        } else {
+            
+            PlayerIdleOnEntry();
+        }
+        eventQueue->add_event(Event<EV_UPDATE_STATUS>(playerNumber, state, otherPlayer->state).buffer_b);
+        
+    }
+
+}
+
+
+void Player::onSend_Pot(uint8_t* data){
+    if(VERBOSE>0){ std::cout << " on_add_pot\n";}
+
+    // CHANGE: a lot of this processing can be done on the engine
+    Event<EV_SEND_POT> event(data);
+    std::cout << "paddle positions:\n";
+    std::cout << event.x0 << " " << event.y0 << " " << event.x1 << " " << event.y1 << "\n";
+
+    int x = event.x;
+    int y = event.y;
+    int dx = event.dx;
+    int dy = event.dy;
+    int Lx = server->engine->Lx;
+    int Ly = server->engine->Ly;
+
+    std::cout << event.x << " " << event.y << " " << event.dx << " " << event.dy << "\n";
+    std::cout << "Lxy:" << Lx << " " << Ly << "\n";
+    
+    if(x+dx > Lx) dx = Lx - x; 
+    if(y+dy > Ly) dy = Ly - y;
+
+    if(x<0){
+        dx += x;
+        x = 0;
+    }
+    if(y<0){
+        dy += y;
+        y = 0;
+    }
+    int buf_size = dx*dy;
+
+    event.payload_size = buf_size;
+    event.x = x;
+    event.y = y;
+    event.dx = dx;
+    event.dy = dy;
+
+    std::cout << "event contains \n";
+    for(int i=0; i<HEADER_LEN;i++)
+        std::cout << (int)event.buffer_b[i] << " ";
+    std::cout << "\n" << std::flush;
+
+    std::cout << "pot event contains:\n";
+    std::cout << event.x0 << " " << event.y0 << " " << event.x1 << " " << event.y1 << "\n";
+
+
+
+    uint8_t buffer[buf_size+HEADER_LEN];
+    for(unsigned i=0; i<HEADER_LEN; i++)
+        buffer[i] = event.buffer_b[i];
+
+    server->engine->get_pot(x, y, dx, dy, buffer+HEADER_LEN);
+
+    // std::cout << "potential gotten from physics:\n";
+    // int n;
+    // for(int x0=0; x0<dx; x0++){
+    //     for(int y0=0; y0<dy; y0++){
+    //         n = x0 + dx*y0;
+    //         std::cout << (int)buffer[n+HEADER_LEN] << " ";
+    //     }
+    //     std::cout << "\n";
+    // }
+
+    sender(buffer, buf_size+HEADER_LEN);
+
 }
 
 void Player::PlayerInGameOnEntry(){
@@ -220,13 +331,14 @@ void Player::PlayerInGameHandler(uint8_t* data){
         if(ev.keycode == KEY_esc){
             PlayerInEndOnEntry(1-ev.player_number);
         }
+
+
     }
 
     // Someone won
     if(evg.event_ID == EV_PLAYER_WON){
         Event<EV_PLAYER_WON> ev(data);
         int winner = ev.player_number;
-
         PlayerInEndOnEntry(winner);
     }
 
@@ -234,6 +346,28 @@ void Player::PlayerInGameHandler(uint8_t* data){
     if(evg.event_ID == EV_PRESSED_SPACE){
         PlayerFreezeOnEntry();
         sender(Event<EV_PAUSE_GAME>(-1).buffer_b, HEADER_LEN);
+    }
+
+    // Update paddles
+    if(evg.event_ID == EV_PADDLE_UPDATE){
+        sender(data, HEADER_LEN);
+    }
+
+    // Update potential
+    if(evg.event_ID == EV_SEND_POT){
+        onSend_Pot(data);
+    }
+
+
+    // Check if a player disconnected. 
+    if(evg.event_ID == EV_DISCONNECT){
+        if(evg.player_number == playerNumber){
+            PlayerDisconnectedOnEntry();
+        } else {
+            PlayerInEndOnEntry(playerNumber);
+        }
+        
+        
     }
 
 }
@@ -251,6 +385,18 @@ void Player::PlayerFreezeHandler(uint8_t* data){
     // Toggle StartNewGame off
     if(evg.event_ID == EV_PRESSED_SPACE && evg.player_number == playerNumber){
         PlayerWantUnpauseOnEntry();
+    }
+
+
+    // Check if a player disconnected.
+    if(evg.event_ID == EV_DISCONNECT){
+        if(evg.player_number == playerNumber){
+            PlayerDisconnectedOnEntry();
+        } else {
+            PlayerInEndOnEntry(playerNumber);
+        }
+        
+        
     }
 }
 
@@ -277,6 +423,18 @@ void Player::PlayerWantUnpauseHandler(uint8_t* data){
     if(evg.event_ID == EV_PRESSED_SPACE && evg.player_number == playerNumber){
         PlayerFreezeOnEntry();
     }   
+
+
+    // Check if a player disconnected.
+    if(evg.event_ID == EV_DISCONNECT){
+        if(evg.player_number == playerNumber){
+            PlayerDisconnectedOnEntry();
+        } else {
+            PlayerInEndOnEntry(playerNumber);
+        }
+        
+        
+    }
 }
 
 
@@ -297,5 +455,17 @@ void Player::PlayerInEndHandler(uint8_t* data){
         if(ev.keycode == KEY_return){
             PlayerIdleOnEntry();
         }
+    }
+
+
+    // Check if a player disconnected.
+    if(evg.event_ID == EV_DISCONNECT){
+        if(evg.player_number == playerNumber){
+            PlayerDisconnectedOnEntry();
+        } else {
+            PlayerInEndOnEntry(playerNumber);
+        }
+        
+        
     }
 }
