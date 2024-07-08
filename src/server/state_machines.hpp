@@ -13,12 +13,6 @@ class Server;
 
 class Player{
 public:
-    event_queue *eventQueue;
-    connection_handler* connection;
-    int playerNumber;
-    int socket;
-    std::vector<std::thread> threads;
-    void (Player::*activeHandler)(uint8_t*);
 
     int PlayerDisconnected = 0;
     int PlayerIdle = 1;
@@ -27,26 +21,43 @@ public:
     int PlayerFreeze = 4;
     int PlayerWantUnpause = 5;
     int PlayerInEnd = 6;
-    int state;
 
-    std::string stateStrings[10];
-    
     Player *otherPlayer;
     Server *server;
+    event_queue *eventQueue;
+    connection_handler* connection;
+    std::vector<std::thread> threads;
 
-    Player(event_queue*, connection_handler*, int pNum);
+    void (Player::*activeHandler)(uint8_t*);
+
+
+    int playerNumber;
+    int socket;
+    int state;
+    unsigned delay_streamer;
+    std::string stateString;
+
+    // std::string stateStrings[10]; // CHANGE
+    
+    
+
+    Player(int pNum);
     ~Player();
-    void addOtherPlayer(Player *player);   
-    void addServer(Server *serv);
-    void handle(uint8_t* data);
     void streamer();
     void listener();
     void sender(uint8_t*, unsigned);
+    void setStreamerDelayMS(int);
+    void addEventQueue(event_queue*);
+    void addConnectionHandler(connection_handler*);
 
+    void addOtherPlayer(Player *player);   
+    void addServer(Server *serv);
+    void handle(uint8_t* data);
+    
     
     void onSend_Pot(uint8_t*);
 
-    void ProcessDisconnection(uint8_t*);
+    // void ProcessDisconnection(uint8_t*);
     void PlayerDisconnectedOnEntry();
     void PlayerDisconnectedHandler(uint8_t* data);
 
@@ -80,14 +91,17 @@ public:
     int GameRunning = 1;
     int GamePaused = 2;
     int state;
-    std::string stateStrings[10];
+    std::string stateString;
 
     Player *player1, *player2;
 
-    Server(event_queue* eq);
+    Server();
     void addPlayers(Player *p1, Player *p2);
-    void handle(uint8_t*);
     void addSimulator(simulator*);
+    void addEventQueue(event_queue*);
+    
+
+    void handle(uint8_t*);
     void processPressedKey(uint8_t*);
 
     void GameOffOnEntry();

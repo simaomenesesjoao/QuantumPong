@@ -2,7 +2,6 @@
 #include <SDL2/SDL_render.h>
 #include <string>
 #include <SDL2/SDL_ttf.h>
-#include "shared_memory.hpp"
 
 class graphics {
 
@@ -53,9 +52,8 @@ class graphics {
         float score_top=0, score_bot=0;
 
         unsigned PIXEL_SIZE;
-        shared_memory *memory;
 
-    graphics(shared_memory*);
+    graphics();
     void init(unsigned, unsigned);
     void initAfterPlayerNumber(int);
     void finalize();

@@ -2,18 +2,14 @@
 #include <SDL2/SDL_rect.h>
 #include <SDL2/SDL_stdinc.h>
 #include <SDL2/SDL_surface.h>
-#include <cstddef>
+// #include <cstddef>
 #include <iostream>
-#include <unistd.h>
 #include <SDL2/SDL.h>
-
 #include "../macros.hpp"
-#include "shared_memory.hpp"
 #include "graphics.hpp"
 #include <sstream>
-graphics::graphics(shared_memory *mem){
-    memory = mem;
-}
+
+graphics::graphics(){}
 
 
 void graphics::CreateTextureFromString(std::string textureText, SDL_Color textColor, SDL_Texture **texture, SDL_Surface **surface){
@@ -90,7 +86,7 @@ void graphics::init(unsigned WIDTH, unsigned HEIGHT){
     buffer_wavefunction = new int[width*height]; // buffer with wavefunction value
     buffer_SDL = new int[HEADER_LEN];            // buffer with SDL events
 
-    for(int i=0; i<width*height; i++){
+    for(unsigned i=0; i<width*height; i++){
         buffer_potential[i] = 0;
     }
 
@@ -341,7 +337,7 @@ void graphics::endScreen(bool won){
 
 void graphics::update_wavefunction(uint8_t *buffer1){
     // std::cout << "graphics: entered update_wavefunction\n" << std::flush;
-    for(int i=0; i<width*height; i++) buffer_wavefunction[i] = (int)buffer1[i];
+    for(unsigned i=0; i<width*height; i++) buffer_wavefunction[i] = (int)buffer1[i];
     // std::cout << "graphics: left update_wavefunction\n" << std::flush;
 }
 
@@ -393,7 +389,6 @@ void graphics::draw_score(){
 
     int height_top = (int)(score_top*height);
     int height_bot = (int)(score_bot*height);
-    std::cout << "heights:" << height_top << " " << height_bot << "\n";
 
 
 
@@ -422,7 +417,7 @@ void graphics::draw_score(){
 
     for(unsigned j=1; j < score_width; j++){
         // for(unsigned i=height-height_bot; i < height; i++){
-        for(unsigned i=0; i < height_bot; i++){
+        for(int i=0; i < height_bot; i++){
             unsigned n = i*score_width + j;
             buf[PIXEL_SIZE*n+0] = 255; // A
             buf[PIXEL_SIZE*n+1] = P2R*0.8;   // R

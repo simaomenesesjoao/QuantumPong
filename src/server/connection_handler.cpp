@@ -7,7 +7,9 @@
 #include "../event_queue.hpp"
 #include "connection_handler.hpp"
 
-connection_handler::connection_handler(event_queue *ev_q){
+connection_handler::connection_handler(){}
+
+void connection_handler::addEventQueue(event_queue *ev_q){
     eq = ev_q;
 }
 

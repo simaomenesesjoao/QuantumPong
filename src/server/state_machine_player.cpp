@@ -10,11 +10,13 @@
 
 
 void Player::streamer(){
-    unsigned delay_streamer = 100*1000;
+    // Streams the wavefunction to the client. It uses the server's internal wavefunction buffer 'buffer_f' which
+    // is made of 100 bytes (HEADER_LEN) of header information and a payload with the wavefunction 
+    if(PSTREAMER_DEBUG>0){ std::cout << "Entered streamer for player " << playerNumber << "\n";}
+
+    
     uint8_t *buffer_f = server->engine->buffer_f;
     unsigned buffer_f_size = server->engine->buffer_f_size;
-    if(VERBOSE>0){ std::cout << "Entered streamer for player " << playerNumber << "\n";}
-   
 
     auto start = std::chrono::system_clock::now();
 
@@ -36,9 +38,9 @@ void Player::streamer(){
 }
 
 void Player::listener(){
+    // Receives events from the remote client
     
-    uint8_t* read_buf;
-    read_buf = new uint8_t[HEADER_LEN];
+    uint8_t* read_buf = new uint8_t[HEADER_LEN];
 
     if(VERBOSE>0){ std::cout << "Entered listener for player " << playerNumber << " in socket " << socket << "\n";}
 
@@ -70,30 +72,34 @@ void Player::sender(uint8_t *data, unsigned length){
     std::cout << "Sending to socket " << socket << " " << (int)data[0] << " " << (int)data[1] << "with length" << length <<  "\n";
     int result = send(socket, data, length*sizeof(uint8_t), MSG_NOSIGNAL);
 
-    int n;
     if(result < 0){
         eventQueue->add_event(Event<EV_DISCONNECT>(playerNumber).buffer_b);
     }
 }
 
 
+void Player::setStreamerDelayMS(int delay){
+    delay_streamer = delay; 
+}
 
-
-Player::Player(event_queue* eq, connection_handler* conn, int pNum){
+void Player::addEventQueue(event_queue *eq){
     eventQueue = eq;
+}
+
+void Player::addConnectionHandler(connection_handler *conn){
     connection = conn;
+}
+
+
+Player::Player(int pNum){
     playerNumber = pNum;
+    delay_streamer = 100*1000; 
 
     socket = -1;
     activeHandler = &Player::PlayerDisconnectedHandler;
     state = PlayerDisconnected;
-    stateStrings[PlayerDisconnected] = "PlayerDisconnected";
-    stateStrings[PlayerIdle]         = "PlayerIdle";
-    stateStrings[PlayerWantNew]      = "PlayerWantNew";
-    stateStrings[PlayerInGame]       = "PlayerInGame";
-    stateStrings[PlayerFreeze]       = "PlayerFreeze";
-    stateStrings[PlayerWantUnpause]  = "PlayerWantUnpause";
-    stateStrings[PlayerInEnd]        = "PlayerInEnd";
+    stateString = "PlayerDisconnected";
+
 }
 
 Player::~Player(){
@@ -113,20 +119,17 @@ void Player::handle(uint8_t* data){(this->*activeHandler)(data);}
 
 
 
-void Player::ProcessDisconnection(uint8_t* data){
-    Event<EV_GENERIC> evg(data);
 
-    
-
-
-}
+// void Player::ProcessDisconnection(uint8_t* data){
+//     Event<EV_GENERIC> evg(data);
+// }
 
 void Player::PlayerDisconnectedOnEntry(){
     state = PlayerDisconnected;
+    stateString = "PlayerDisconnected";
     activeHandler = &Player::PlayerDisconnectedHandler;
     connection->connection_status[playerNumber] = false;
     socket = -1;
-
 }
 
 void Player::PlayerDisconnectedHandler(uint8_t* data){
@@ -143,9 +146,6 @@ void Player::PlayerDisconnectedHandler(uint8_t* data){
         
         threads.push_back(std::thread(&Player::listener, this));
 
-        
-        // sender(Event<EV_CHANGE_SCREEN>(playerNumber,0).buffer_b, HEADER_LEN);
-                
     }
 
 }
@@ -155,6 +155,7 @@ void Player::PlayerDisconnectedHandler(uint8_t* data){
 void Player::PlayerIdleOnEntry(){
     std::cout << "PlayerIdleOnEntry " << playerNumber << "\n";
     state = PlayerIdle;
+    stateString = "PlayerIdle";
 
     activeHandler = &Player::PlayerIdleHandler; 
     eventQueue->add_event(Event<EV_UPDATE_STATUS>(playerNumber, state, otherPlayer->state).buffer_b);
@@ -194,6 +195,7 @@ void Player::PlayerIdleHandler(uint8_t* data){
 
 void Player::PlayerWantNewOnEntry(){
     state = PlayerWantNew;
+    stateString = "PlayerWantNew";
     activeHandler = &Player::PlayerWantNewHandler;
 
 
@@ -246,7 +248,7 @@ void Player::PlayerWantNewHandler(uint8_t* data){
 
 
 void Player::onSend_Pot(uint8_t* data){
-    if(VERBOSE>0){ std::cout << " on_add_pot\n";}
+    if(VERBOSE>0){ std::cout << " onSend_Pot\n";}
 
     // CHANGE: a lot of this processing can be done on the engine
     Event<EV_SEND_POT> event(data);
@@ -298,28 +300,21 @@ void Player::onSend_Pot(uint8_t* data){
 
     server->engine->get_pot(x, y, dx, dy, buffer+HEADER_LEN);
 
-    // std::cout << "potential gotten from physics:\n";
-    // int n;
-    // for(int x0=0; x0<dx; x0++){
-    //     for(int y0=0; y0<dy; y0++){
-    //         n = x0 + dx*y0;
-    //         std::cout << (int)buffer[n+HEADER_LEN] << " ";
-    //     }
-    //     std::cout << "\n";
-    // }
-
     sender(buffer, buf_size+HEADER_LEN);
 
 }
+
 
 void Player::PlayerInGameOnEntry(){
 
     std::cout << "PlayerInGameOnEntry " << playerNumber << "\n";
     state = PlayerInGame;
+    stateString = "PlayerInGame";
     activeHandler = &Player::PlayerInGameHandler;
 
     threads.push_back(std::thread(&Player::streamer, this));
 }
+
 
 void Player::PlayerInGameHandler(uint8_t* data){
     std::cout << "PlayerInGameHandler " << playerNumber << "\n";
@@ -373,13 +368,15 @@ void Player::PlayerInGameHandler(uint8_t* data){
 }
 
 void Player::PlayerFreezeOnEntry(){
-    std::cout << "PlayerFreezeOnEntry" << playerNumber << "\n";
+    if(P_ON_ENTRY) std::cout << "PlayerFreezeOnEntry" << playerNumber << "\n";
+
     state = PlayerFreeze;
+    stateString = "PlayerFreeze";
     activeHandler = &Player::PlayerFreezeHandler;
 }
 
 void Player::PlayerFreezeHandler(uint8_t* data){
-    std::cout << "PlayerFreezeHandler " << playerNumber << "\n";
+    if(P_ON_HANDLER) std::cout << "PlayerFreezeHandler " << playerNumber << "\n";
     Event<EV_GENERIC> evg(data);
 
     // Toggle StartNewGame off
@@ -401,9 +398,12 @@ void Player::PlayerFreezeHandler(uint8_t* data){
 }
 
 void Player::PlayerWantUnpauseOnEntry(){
-    std::cout << "PlayerWantUnpauseOnEntry " << playerNumber << "\n";
+    if(P_ON_ENTRY) std::cout << "Player::PlayerWantUnpauseOnEntry " << playerNumber << "\n";
+
     state = PlayerWantUnpause;
+    stateString = "PlayerWantUnpause";
     activeHandler = &Player::PlayerWantUnpauseHandler; 
+
     if(otherPlayer->state == PlayerWantUnpause){
         Event<EV_UNPAUSE_GAME> unpauseEvent(-1);
         eventQueue->add_event(unpauseEvent.buffer_b);
@@ -412,7 +412,7 @@ void Player::PlayerWantUnpauseOnEntry(){
 }
 
 void Player::PlayerWantUnpauseHandler(uint8_t* data){
-    std::cout << "PlayerWantUnpauseHandler " << playerNumber << "\n";
+    if(P_ON_HANDLER) std::cout << "Player::PlayerWantUnpauseHandler " << playerNumber << "\n";
     Event<EV_GENERIC> evg(data);
 
     if(evg.event_ID == EV_UNPAUSE_GAME){
@@ -439,9 +439,12 @@ void Player::PlayerWantUnpauseHandler(uint8_t* data){
 
 
 void Player::PlayerInEndOnEntry(int winner){
-    std::cout << "PlayerInEndOnEntry " << playerNumber << "\n";
+    if(P_ON_ENTRY) std::cout << "PlayerInEndOnEntry " << playerNumber << "\n";
+
     state = PlayerInEnd;   
+    stateString = "PlayerInEnd";
     activeHandler = &Player::PlayerInEndHandler;
+
     sender(Event<EV_END_SCREEN>(winner).buffer_b, HEADER_LEN); 
 }
 

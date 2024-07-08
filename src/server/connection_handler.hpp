@@ -18,9 +18,11 @@ class connection_handler {
         bool accepting_connections;
 
 
+    connection_handler();
+    void addEventQueue(event_queue*);
+
     void init(unsigned port);
     void process_connections();
-    connection_handler(event_queue*);
 };
 
 #endif 

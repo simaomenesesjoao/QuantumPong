@@ -5,15 +5,13 @@
 #include <complex>
 #include <fstream>
 #include <chrono>
-// #include <mutex>
 #include <iostream>
-// #include <CL/opencl.hpp>
-// #include <algorithm>
 #include "../macros.hpp"
-// #include "event_queue.hpp"
 #include "simulator.hpp"
 
-simulator::simulator(event_queue *evq){
+simulator::simulator(){}
+
+void simulator::addEventQueue(event_queue *evq){
     eq = evq;
 }
 

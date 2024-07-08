@@ -1,11 +1,4 @@
 #include <iostream>
-#include <vector>
-#include <unistd.h>
-#include <thread>
-#include <semaphore.h>
-#include <netinet/in.h>
-#include <CL/opencl.hpp>
-#include "../macros.hpp"
 #include "../event_queue.hpp"
 #include "simulator.hpp"
 #include "connection_handler.hpp"
@@ -13,34 +6,62 @@
 #include "state_machines.hpp"
 
 
-game_engine::game_engine(){}
+game_engine::game_engine():
+    player1(0), player2(1), eventQueue(300){}
 
 void game_engine::game_loop(){
-    delay_event_loop = 5*1000; 
-    delay_streamer = 80*1000;
-    int delay_simulation = 25*1000;
-
+    
+    
     int event = -1;
     uint8_t *data;
 
-    event_queue eventQueue(300);
+    while(true){
+        usleep(delay_event_loop);
+        eventQueue.read(&event, &data);
+        if(event<0) continue;
+        
+        player1.handle(data);
+        player2.handle(data);
+        server.handle(data);
+        std::cout << "event:" << event << " ----- states after: " << player1.stateString << " " << player2.stateString << " " << server.stateString << "\n";
+    }
+    
+}
 
-    connection_handler conn(&eventQueue);
-    conn.init(8080);
-    // CHANGE: dar erro quando porta não estiver disponivel. caso contrário, dá problemas chatos..
+
+void game_engine::init(){
+    // Initialize the game with some default values
+    int ms = 1000;
+
+    delay_event_loop = 5*ms; 
+    delay_streamer = 50*ms;
+    delay_simulation = 25*ms;
 
     unsigned Lx = 300;
     unsigned Ly = 700;
-    simulator engine(&eventQueue);
+
+    int port = 8080;
+
+    // Initialize the connection handler
+    conn.addEventQueue(&eventQueue);
+    conn.init(port);
+
+    // Initialize the physics engine
+    engine.addEventQueue(&eventQueue);
     engine.init(Lx, Ly, delay_simulation);
 
-    threads.push_back(std::thread(&connection_handler::process_connections, &conn));
-    threads.push_back(std::thread(&simulator::loop, &engine));
+    // Initialize player and server instances
+    server.addEventQueue(&eventQueue);
+    player1.addEventQueue(&eventQueue);
+    player2.addEventQueue(&eventQueue);
 
-    // Create player and server instances, and pass the pointers
-    Player player1(&eventQueue, &conn, 0), player2(&eventQueue, &conn, 1);
-    Server server(&eventQueue);
-    
+    player1.addConnectionHandler(&conn);
+    player2.addConnectionHandler(&conn);
+
+    player1.setStreamerDelayMS(delay_streamer);
+    player2.setStreamerDelayMS(delay_streamer);
+
+    // Connect the server and players to each other through their references    
     player1.addOtherPlayer(&player2);
     player2.addOtherPlayer(&player1);
     player1.addServer(&server);
@@ -49,27 +70,19 @@ void game_engine::game_loop(){
     server.addSimulator(&engine);
 
 
-    
+    // Start the threads
+    threads.push_back(std::thread(&connection_handler::process_connections, &conn));
+    threads.push_back(std::thread(&simulator::loop, &engine));
+}
 
-    while(true){
-        usleep(delay_event_loop);
-        eventQueue.read(&event, &data);
-        if(event<0) continue;
-        std::cout << "event: " << event << "\n";
-        std::cout << "states before: " << player1.stateStrings[player1.state] << " " << player2.stateStrings[player2.state] << " " << server.stateStrings[server.state] << "\n";
-        player1.handle(data);
-        player2.handle(data);
-        server.handle(data);
-        std::cout << " ----- states after: " << player1.stateStrings[player1.state] << " " << player2.stateStrings[player2.state] << " " << server.stateStrings[server.state] << "\n";
-    }
-    
+void game_engine::finalize(){
+
     // Join all threads
     for (auto& thread : threads) {
         if (thread.joinable()) {
             thread.join();
         }
-    }
-
+    } 
     engine.finalize();
 
 }

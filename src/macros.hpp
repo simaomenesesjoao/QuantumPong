@@ -1,7 +1,17 @@
 #ifndef MACROS_H
 #define MACROS_H 1
 
+// Debug variables
 #define VERBOSE 2
+#define PSTREAMER_DEBUG 1
+#define S_ON_ENTRY 1
+#define S_ON_HANDLER 1
+
+#define P_ON_ENTRY 1 
+#define P_ON_HANDLER 1 
+
+
+
 
 #define EV_GENERIC -1
 #define EV_CONNECT 0
@@ -27,9 +37,11 @@
 #define P1R 255
 #define P1G 160
 #define P1B 0
+
 #define P2R 0
 #define P2G 100
 #define P2B 255
+
 
 // Variables
 #define PAYLOAD_OFF 0

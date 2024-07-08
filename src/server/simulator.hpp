@@ -61,8 +61,9 @@ class simulator {
     bool absorb_on, running, win;
 
     // Methods
-    simulator(event_queue*);
+    simulator();
     void loop();
+    void addEventQueue(event_queue*);
     void init(unsigned, unsigned, int);
     void finalize();
 

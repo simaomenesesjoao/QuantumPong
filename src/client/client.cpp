@@ -8,11 +8,12 @@
 
 #include "../macros.hpp"
 #include "../event_queue.hpp"
-#include "shared_memory.hpp"
 #include "client.hpp"
 
-client::client(shared_memory *memory_pt, std::string ip, unsigned port){
-    memory = memory_pt;
+
+client::client(){}
+
+void client::initConnection(std::string ip, unsigned port){
     socket_has_data = false;
     close = false;
     connected = false;
@@ -32,11 +33,7 @@ client::client(shared_memory *memory_pt, std::string ip, unsigned port){
         exit(1);
     }
 
-    //FD_ZERO(&rfd);
-    //FD_SET(sock, &rfd);
 
-    //timeout.tv_sec = 0;
-    //timeout.tv_usec = 100;
     sem_init(&semaphore1, 0, 0);
     sem_init(&semaphore2, 0, 0);
 }
