@@ -27,6 +27,7 @@ public:
     void on_stream(uint8_t *data);
     void on_paddle_update(uint8_t *data);
     void on_send_pot(uint8_t *data);
+    void on_send_mag(uint8_t *data);
     void on_pressed_space(uint8_t *data);
     void on_pressed_key(uint8_t *data);
     void on_mousebuttondown(uint8_t *data);

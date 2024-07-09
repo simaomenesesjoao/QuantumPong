@@ -148,7 +148,7 @@ void Server::GameRunningHandler(uint8_t* data){
         int y = event.y;
 
 
-        if(VERBOSE>0){
+        if(true){
             std::cout << "p" << player_number << " on_mousebuttondown. button:" << button << " ";
             std::cout << "xy: " << x << " " << y <<  "\n";
         }
@@ -162,7 +162,7 @@ void Server::GameRunningHandler(uint8_t* data){
 
         if(button == 3){
 
-            unsigned w = 70;
+            // unsigned w = 70;
             float v = 0.005;
             engine->set_local_B(x, y, v);
 
@@ -200,3 +200,6 @@ void Server::GamePausedHandler(uint8_t* data){
         }
     }
 }
+
+
+

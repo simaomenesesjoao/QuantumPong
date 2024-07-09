@@ -1,1 +1,6 @@
-assets
+src/server/QuantumPong
+src/server/*.o
+src/client/client
+src/client/*.o
+tests/*.o
+tests/test1

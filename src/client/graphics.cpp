@@ -76,18 +76,26 @@ void graphics::init(unsigned WIDTH, unsigned HEIGHT){
     rend = SDL_CreateRenderer(win, -1, render_flags);
     wavefunctionTexture = SDL_CreateTexture(rend, SDL_PIXELFORMAT_BGRA8888, SDL_TEXTUREACCESS_STREAMING, WIDTH, HEIGHT);
     potTexture = SDL_CreateTexture(rend, SDL_PIXELFORMAT_BGRA8888, SDL_TEXTUREACCESS_STREAMING, WIDTH, HEIGHT);
+    magTexture = SDL_CreateTexture(rend, SDL_PIXELFORMAT_BGRA8888, SDL_TEXTUREACCESS_STREAMING, WIDTH, HEIGHT);
 
     PIXEL_SIZE = 4;
     Nbytes = width*height*PIXEL_SIZE;
 
-    buffer_pixels_wavefunction = new uint8_t[Nbytes];         // buffer with pixels to put on screen
-    buffer_pixels_potential = new uint8_t[Nbytes];         // buffer with pixels to put on screen
-    buffer_potential = new int[width*height];    // buffer with potential value
-    buffer_wavefunction = new int[width*height]; // buffer with wavefunction value
+    buffer_pixels_wavefunction = new uint8_t[Nbytes]; // buffer with wavefunction pixels to put on screen
+    buffer_wavefunction = new int[width*height];      // buffer with wavefunction value
+
+    buffer_pixels_potential = new uint8_t[Nbytes]; // buffer with potential pixels to put on screen
+    buffer_potential = new int[width*height];      // buffer with potential value
+    
+    buffer_pixels_magnetic = new uint8_t[Nbytes]; // buffer with pixels to put on screen
+    buffer_magnetic = new int[width*height];      // buffer with magnetic value
+    
+    
     buffer_SDL = new int[HEADER_LEN];            // buffer with SDL events
 
     for(unsigned i=0; i<width*height; i++){
         buffer_potential[i] = 0;
+        buffer_magnetic[i] = 0;
     }
 
 
@@ -152,6 +160,7 @@ void graphics::init(unsigned WIDTH, unsigned HEIGHT){
 	SDL_SetTextureBlendMode( wavefunctionTexture, SDL_BLENDMODE_BLEND );
     SDL_SetTextureBlendMode( whiteMaskTexture, SDL_BLENDMODE_BLEND );
     SDL_SetTextureBlendMode( potTexture, SDL_BLENDMODE_BLEND );
+    SDL_SetTextureBlendMode( magTexture, SDL_BLENDMODE_BLEND );
     SDL_SetTextureBlendMode( paddle1Texture, SDL_BLENDMODE_BLEND );
     SDL_SetTextureBlendMode( paddle2Texture, SDL_BLENDMODE_BLEND );
     SDL_SetTextureBlendMode( scoreBarTexture, SDL_BLENDMODE_BLEND );
@@ -164,10 +173,12 @@ void graphics::finalize(){
     // delete [] buffer_pixels_potential; // automatically taken care of by SDL_LockTexture?
     delete [] buffer_SDL;
     delete [] buffer_potential;
+    delete [] buffer_magnetic;
     delete [] buffer_wavefunction;
 
     SDL_DestroyTexture(wavefunctionTexture);
     SDL_DestroyTexture(potTexture);
+    SDL_DestroyTexture(magTexture);
 
     SDL_DestroyTexture(DisconnectedStatusTexture);
     SDL_DestroyTexture(ConnectedStatusTexture);
@@ -359,7 +370,7 @@ void graphics::draw_wavefunction(){
             unsigned n = (i*width + j);
             
             // ARGB
-            buffer_pixels_wavefunction[PIXEL_SIZE*n+0] = 255; // A
+            buffer_pixels_wavefunction[PIXEL_SIZE*n+0] = buffer_wavefunction[n]; // A
             buffer_pixels_wavefunction[PIXEL_SIZE*n+1] = 0; // R
             buffer_pixels_wavefunction[PIXEL_SIZE*n+2] = buffer_wavefunction[n]; // G
             buffer_pixels_wavefunction[PIXEL_SIZE*n+3] = 0; // B
@@ -474,7 +485,7 @@ void graphics::draw_potential(){
             unsigned n = (i*width + j);
             
             // ARGB
-            buffer_pixels_potential[PIXEL_SIZE*n+0] = 255; // A
+            buffer_pixels_potential[PIXEL_SIZE*n+0] = buffer_potential[n]; // A
             buffer_pixels_potential[PIXEL_SIZE*n+1] = 0; // R
             buffer_pixels_potential[PIXEL_SIZE*n+2] = 0; // G
             buffer_pixels_potential[PIXEL_SIZE*n+3] = buffer_potential[n]; // B
@@ -485,6 +496,53 @@ void graphics::draw_potential(){
     SDL_UnlockTexture(potTexture);
     
 }
+
+
+
+void graphics::update_magnetic(int x, int y, int dx, int dy, uint8_t *buffer){
+    // std::cout << "update_magnetic\n";
+
+    int n, m;
+    for(int i=0; i<dx; i++){
+        for(int j=0; j<dy; j++){
+            n = x+i + (y+j)*width;
+            m = i + dx*j;
+            buffer_magnetic[n] = (int)buffer[m];
+            // std::cout << buffer_magnetic[n] << " ";
+        }
+        // std::cout << "\n";
+    }
+}
+
+void graphics::reset_magnetic(){
+    for(unsigned n=0; n<width*height; n++){
+        buffer_magnetic[n] = 0;
+    }
+}
+
+void graphics::draw_magnetic(){
+    std::cout << "graphics: entered draw_magnetic\n" << std::flush;
+
+    int pitch;
+    SDL_LockTexture(magTexture, NULL,  (void **)&buffer_pixels_magnetic, &pitch);
+
+    for(unsigned i=0; i < height; i++){
+        for(unsigned j=0; j < width; j++){
+            unsigned n = (i*width + j);
+            
+            // ARGB
+            buffer_pixels_magnetic[PIXEL_SIZE*n+0] = buffer_magnetic[n]; // A
+            buffer_pixels_magnetic[PIXEL_SIZE*n+1] = buffer_magnetic[n]; // R
+            buffer_pixels_magnetic[PIXEL_SIZE*n+2] = 0; // G
+            buffer_pixels_magnetic[PIXEL_SIZE*n+3] = 0; // B
+        }
+    }
+    // std::cout << "graphics: left draw_potential\n" << std::flush;
+
+    SDL_UnlockTexture(magTexture);
+    
+}
+
 
 
 
@@ -531,15 +589,20 @@ void graphics::update(){
     
     // updates wavefunction and potential textures    
     draw_wavefunction();
-    SDL_SetTextureAlphaMod( wavefunctionTexture, 255);
+    // SDL_SetTextureAlphaMod( wavefunctionTexture, 255);
     SDL_RenderCopy(rend, wavefunctionTexture, &srcrect, &srcrect);
 
-    SDL_SetTextureAlphaMod( whiteMaskTexture, 255-alpha );
-    SDL_RenderCopy(rend, whiteMaskTexture, &srcrect, &srcrect);    
+    
+    
     draw_potential();
-
     SDL_SetTextureAlphaMod( potTexture, 150);
     SDL_RenderCopy(rend, potTexture, &srcrect, &srcrect);
+
+    draw_magnetic();
+    SDL_SetTextureAlphaMod( magTexture, 150);
+    SDL_RenderCopy(rend, magTexture, &srcrect, &srcrect);
+
+
 
     SDL_SetTextureAlphaMod( scoreBarTexture, 255);
     draw_score();
@@ -551,6 +614,11 @@ void graphics::update(){
     draw_paddle(x0, y0, paddle1Texture);
     draw_paddle(x1, y1, paddle2Texture);
     
+
+    SDL_SetTextureAlphaMod( whiteMaskTexture, 255-alpha );
+    SDL_RenderCopy(rend, whiteMaskTexture, &srcrect, &srcrect);    
+    
+
     SDL_RenderPresent(rend);
     
     // std::cout << "graphics: left update\n" << std::flush;

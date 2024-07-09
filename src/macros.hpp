@@ -25,7 +25,7 @@
 #define EV_PRESSED_KEY 8
 #define EV_MOUSEBUTTONDOWN 9
 #define EV_SEND_POT 10
-#define EV_ADD_MAG 11
+#define EV_SEND_MAG 11
 #define EV_START_GAME 12
 #define EV_QUIT_GAME 13
 #define EV_PAUSE_GAME 14

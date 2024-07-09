@@ -54,10 +54,8 @@ public:
     void addServer(Server *serv);
     void handle(uint8_t* data);
     
-    
     void onSend_Pot(uint8_t*);
-
-    // void ProcessDisconnection(uint8_t*);
+    void onSend_Mag(uint8_t*);
     void PlayerDisconnectedOnEntry();
     void PlayerDisconnectedHandler(uint8_t* data);
 

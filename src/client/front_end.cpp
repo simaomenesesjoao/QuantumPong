@@ -25,6 +25,7 @@ void frontEnd::on_end_screen(uint8_t *data){
     gr.endScreen(event.player_number == cl.player_number);
     gr.reset_potential();
     gr.reset_wavefunction();
+    gr.reset_magnetic();
     gr.score_top = 0;
     gr.score_bot = 0;
 
@@ -96,6 +97,21 @@ void frontEnd::on_send_pot(uint8_t *data){
     gr.update_potential(x, y, dx, dy, cl.buffer_receive);
     gr.update();
     std::cout << "main: left on_send_pot\n" << std::flush;
+}
+
+
+void frontEnd::on_send_mag(uint8_t *data){
+    std::cout << "main: entered on_send_mag\n" << std::flush;
+
+    Event<EV_SEND_MAG> event(data);
+    int x = event.x;
+    int y = event.y;
+    int dx = event.dx;
+    int dy = event.dy;
+
+    gr.update_magnetic(x, y, dx, dy, cl.buffer_receive);
+    gr.update();
+    std::cout << "main: left on_send_mag\n" << std::flush;
 }
 
 void frontEnd::on_pressed_space(uint8_t *data){
@@ -200,6 +216,7 @@ void frontEnd::game_loop(){
             if(event == EV_END_SCREEN) on_end_screen(cl.buffer_header);
             if(event == EV_STREAM) on_stream(cl.buffer_header);
             if(event == EV_SEND_POT) on_send_pot(cl.buffer_header);
+            if(event == EV_SEND_MAG) on_send_mag(cl.buffer_header);
             if(event == EV_PADDLE_UPDATE) on_paddle_update(cl.buffer_header);
             
             if(event == EV_PAUSE_GAME) on_pause_game(cl.buffer_header);

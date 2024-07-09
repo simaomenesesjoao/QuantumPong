@@ -329,7 +329,6 @@ template <> class Event <EV_SEND_POT>{
 
         Event(int xp, int yp, int ddx, int ddy, int x0p, int y0p, int x1p, int y1p){
             event_ID = EV_SEND_POT;
-            payload_size = HEADER_LEN;
             payload_size = ddx*ddy;
             player_number = 0; // not really important
             x = xp;
@@ -343,6 +342,42 @@ template <> class Event <EV_SEND_POT>{
             x1 = x1p;
             y1 = y1p;   
   
+
+        }
+        
+        Event(uint8_t *buf){
+            for(unsigned i=0; i<HEADER_LEN; i++){
+                buffer_b[i] = buf[i];
+            }
+        }
+
+        ~Event(){};
+};
+
+
+template <> class Event <EV_SEND_MAG>{
+    public:
+        union {
+            struct {
+                int event_ID;
+                int payload_size;
+                int player_number;
+
+                int x, y, dx, dy;
+                
+            };
+            uint8_t buffer_b[HEADER_LEN];
+        };
+
+
+        Event(int xp, int yp, int ddx, int ddy){
+            event_ID = EV_SEND_MAG;
+            payload_size = ddx*ddy;
+            player_number = 0; // not really important
+            x = xp;
+            y = yp;
+            dx = ddx;
+            dy = ddy;  
 
         }
         

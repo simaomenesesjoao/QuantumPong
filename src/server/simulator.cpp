@@ -107,7 +107,7 @@ void simulator::init_buffers(){
     max = 1.0;
     valB = 0.0;
     val = 0.0;
-    radB = 200;
+    radB = 100;
 
     queue.enqueueWriteBuffer(scale_buf, CL_TRUE, 0, sizeof(float), &SCALE);
     queue.enqueueWriteBuffer(max_buf,   CL_TRUE, 0, sizeof(float), &max);
@@ -440,8 +440,7 @@ void simulator::set_local_B(unsigned x, unsigned y, float v){
     unsigned dx = radB;
     unsigned dy = radB;
 
-
-    queue.enqueueWriteBuffer(valB_buf,   CL_TRUE, 0, sizeof(float), &valB);
+    queue.enqueueWriteBuffer(valB_buf, CL_TRUE, 0, sizeof(float), &valB);
 
     offset      = cl::NDRange{(cl::size_type)(x-dx/2), (cl::size_type)(y-dy/2)};
     global_size = cl::NDRange{(cl::size_type)(dx), (cl::size_type)(dy)};
@@ -452,10 +451,14 @@ void simulator::set_local_B(unsigned x, unsigned y, float v){
     global_size = cl::NDRange{(cl::size_type)(Lx), (cl::size_type)(Ly)};
     local_size  = cl::NDRange{(cl::size_type)(local), (cl::size_type)(local)};
     queue.enqueueNDRangeKernel(set_sq_B, offset, global_size, local_size);
+
+    Event<EV_SEND_MAG> event(x-dx/2, y-dy/2, dx, dy);        
+    eq->add_event(event.buffer_b);
+    // std::cout << "left set_local_B\n";
 }
 
 void simulator::set_local_pot(int x, int y, unsigned dx, unsigned dy, float v){
-    std::cout << "simulator: set_local_pot:\n";
+    // std::cout << "simulator: set_local_pot:\n";
 
     cl::NDRange offset;
     cl::NDRange global_size;
@@ -481,7 +484,7 @@ void simulator::set_local_pot(int x, int y, unsigned dx, unsigned dy, float v){
     if(potential_changed){
         potential_changed = false;
         queue.enqueueWriteBuffer(changed_buf, CL_TRUE, 0, sizeof(bool), &potential_changed);
-        std::cout << "CHANGED POTENTIAL\n";
+        // std::cout << "CHANGED POTENTIAL\n";
 
         Event<EV_SEND_POT> event(x-dx/2,y-dy/2,dx,dy,
          top_player_x, top_player_y, bot_player_x, bot_player_y);
@@ -580,7 +583,7 @@ void simulator::reset_state(){
     absorb_on = true;
     paused = true;
     modifier = 1.0;
-    radB = 200;
+    radB = 20;
 
     unsigned ix = Lx/2;
     unsigned iy = Ly/2;
@@ -905,6 +908,42 @@ void simulator::get_pot(int x, int y, int dx, int dy, uint8_t *buffer){
     delete[] array;
 }
 
+
+
+void simulator::get_mag(int x, int y, int dx, int dy, uint8_t *buffer){
+    std::cout << "simulator::get_mag\n" << std::flush;
+    int ddx = dx;
+    int ddy = dy;
+    if(x + ddx > Lx) ddx = Lx-x;
+    if(y + ddy > Ly) ddy = Ly-y;
+
+    cl::NDRange offset;
+    cl::NDRange global_size;
+    cl::NDRange local_size;
+
+    // Get local magnetic field
+    offset      = cl::NDRange{(cl::size_type)(0), (cl::size_type)(0)};
+    global_size = cl::NDRange{(cl::size_type)(Lx), (cl::size_type)(Ly)};
+    local_size  = cl::NDRange{(cl::size_type)(local), (cl::size_type)(local)};
+
+    int4 *array = new int4[Npixels];
+    queue.enqueueNDRangeKernel(colormapB,  offset, global_size, local_size);
+    queue.enqueueReadBuffer(pix_buf, CL_TRUE, 0, sizeof(int4)*Npixels, array);
+
+    int n,m;
+    for(int i=0; i<ddx; i++){
+        for(int j=0; j<ddy; j++){
+            n = i + dx*j;
+            m = i+x + Lx*(j+y);
+            buffer[n] = array[m].z;
+            std::cout << (int)buffer[n] << " ";
+        }
+        std::cout << "\n";
+    }
+
+    delete[] array;
+}
+
 void simulator::update_pixel(){
 
     cl::NDRange offset;
@@ -982,7 +1021,7 @@ void simulator::init(unsigned Lx, unsigned Ly, int delay){
     unsigned local = 2;
 
     // Time evolution operator parameters
-    float dt = 2.0;
+    float dt = 2.0/10; // CHANGE
     unsigned Ncheb = 10;
 
     // initial wavefunction parameters: center, momentum, spread

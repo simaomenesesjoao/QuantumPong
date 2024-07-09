@@ -88,6 +88,7 @@ class simulator {
     void iterate_time(unsigned);
     void update_pixel();
     void get_pot(int, int, int, int, uint8_t*);
+    void get_mag(int, int, int, int, uint8_t*);
     float get_norm(float*, float*);
     void set_max(float);
     void absorb();

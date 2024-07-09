@@ -70,7 +70,7 @@ void kernel set_local_pot(__global float *local_pot, __global float *val, __glob
         if(dx*dx + dy*dy < rad*rad){
             dif = local_pot[i]-val[0];
 
-            // Many threads write to this at the same time. It should be fine though
+            // Many threads write to this at the same time. It should be fine
             if(dif*dif > 1e-5) changed[0] = true;
 
             local_pot[i] = val[0];
@@ -121,11 +121,13 @@ void kernel set_local_B(__global float *mag, __global float *val){
 
 
     if(x>=0 && x < LX && y>=0 && y<LY && frac < 1){
+        
         if(mag[i]+dm > max_mag){
             mag[i] = max_mag;
         } else {
             mag[i] += dm;
         }
+        // printf("%f ", mag[i]);
     }
 
 }
@@ -210,7 +212,7 @@ void kernel colormap(__global float2 *acc, __global int4 *pix, __global float *m
 
 void kernel colormapV(__global float *pot, __global int4 *pix){
     int i = get_global_id(1)*LX + get_global_id(0);
-    float max=2.0;
+    float max=1.5;
     //float max=8.0; // actual value
     int value = (int)(255*pot[i]/max);
 
@@ -233,10 +235,12 @@ void kernel colormapB(__global float *mag, __global int4 *pix){
 
     int i = y*LX + x;
     int j = (y+PAD)*L + (x+PAD);
-
-    float max=0.005*4*2;
+    // v = 0.005;
+    float max=0.005*4;
     int value = (int)(255*mag[j]/max);
 
+    // if(mag[j]>0.001)
+    //     printf("%d,%d:%f.%d.",x,y,mag[j], value);
     pix[i].x = 0; // B
     pix[i].y = 0;   // G
     pix[i].z = value; // R

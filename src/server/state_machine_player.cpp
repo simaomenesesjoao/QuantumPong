@@ -252,8 +252,63 @@ void Player::onSend_Pot(uint8_t* data){
 
     // CHANGE: a lot of this processing can be done on the engine
     Event<EV_SEND_POT> event(data);
-    std::cout << "paddle positions:\n";
-    std::cout << event.x0 << " " << event.y0 << " " << event.x1 << " " << event.y1 << "\n";
+    
+    int x = event.x;
+    int y = event.y;
+    int dx = event.dx;
+    int dy = event.dy;
+    int Lx = server->engine->Lx;
+    int Ly = server->engine->Ly;
+
+    // std::cout << event.x << " " << event.y << " " << event.dx << " " << event.dy << "\n";
+    // std::cout << "Lxy:" << Lx << " " << Ly << "\n";
+    
+    if(x+dx > Lx) dx = Lx - x; 
+    if(y+dy > Ly) dy = Ly - y;
+
+    if(x<0){
+        dx += x;
+        x = 0;
+    }
+    if(y<0){
+        dy += y;
+        y = 0;
+    }
+    int buf_size = dx*dy;
+
+    event.payload_size = buf_size;
+    event.x = x;
+    event.y = y;
+    event.dx = dx;
+    event.dy = dy;
+
+    // std::cout << "event contains \n";
+    // for(int i=0; i<HEADER_LEN;i++)
+    //     std::cout << (int)event.buffer_b[i] << " ";
+    // std::cout << "\n" << std::flush;
+
+    // std::cout << "pot event contains:\n";
+    // std::cout << event.x0 << " " << event.y0 << " " << event.x1 << " " << event.y1 << "\n";
+
+
+
+    uint8_t buffer[buf_size+HEADER_LEN];
+    for(unsigned i=0; i<HEADER_LEN; i++)
+        buffer[i] = event.buffer_b[i];
+
+    server->engine->get_pot(x, y, dx, dy, buffer+HEADER_LEN);
+
+    sender(buffer, buf_size+HEADER_LEN);
+
+}
+
+
+
+void Player::onSend_Mag(uint8_t* data){
+    if(VERBOSE>0){ std::cout << " onSend_Mag\n";}
+
+    // CHANGE: a lot of this processing can be done on the engine
+    Event<EV_SEND_MAG> event(data);
 
     int x = event.x;
     int y = event.y;
@@ -284,21 +339,17 @@ void Player::onSend_Pot(uint8_t* data){
     event.dx = dx;
     event.dy = dy;
 
-    std::cout << "event contains \n";
-    for(int i=0; i<HEADER_LEN;i++)
-        std::cout << (int)event.buffer_b[i] << " ";
-    std::cout << "\n" << std::flush;
-
-    std::cout << "pot event contains:\n";
-    std::cout << event.x0 << " " << event.y0 << " " << event.x1 << " " << event.y1 << "\n";
-
+    // std::cout << "event contains \n";
+    // for(int i=0; i<HEADER_LEN;i++)
+    //     std::cout << (int)event.buffer_b[i] << " ";
+    // std::cout << "\n" << std::flush;
 
 
     uint8_t buffer[buf_size+HEADER_LEN];
     for(unsigned i=0; i<HEADER_LEN; i++)
         buffer[i] = event.buffer_b[i];
 
-    server->engine->get_pot(x, y, dx, dy, buffer+HEADER_LEN);
+    server->engine->get_mag(x, y, dx, dy, buffer+HEADER_LEN);
 
     sender(buffer, buf_size+HEADER_LEN);
 
@@ -351,6 +402,11 @@ void Player::PlayerInGameHandler(uint8_t* data){
     // Update potential
     if(evg.event_ID == EV_SEND_POT){
         onSend_Pot(data);
+    }
+
+    // Update magnetic
+    if(evg.event_ID == EV_SEND_MAG){
+        onSend_Mag(data);
     }
 
 

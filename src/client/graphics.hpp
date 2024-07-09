@@ -11,7 +11,7 @@ class graphics {
         TTF_Font* gFont;
 
 
-        SDL_Texture *wavefunctionTexture, *potTexture;
+        SDL_Texture *wavefunctionTexture, *potTexture, *magTexture;
 
 
 
@@ -42,8 +42,9 @@ class graphics {
         unsigned Nbytes;
         int alpha = 255;
 
-        uint8_t *buffer_pixels_wavefunction, *buffer_pixels_potential;
+        uint8_t *buffer_pixels_wavefunction, *buffer_pixels_potential, *buffer_pixels_magnetic;
         int *buffer_potential;
+        int *buffer_magnetic;
         int *buffer_wavefunction;
         int *buffer_SDL;
 
@@ -60,6 +61,11 @@ class graphics {
     void CreateTextureFromString(std::string , SDL_Color , SDL_Texture **, SDL_Surface **);
     
     bool get_one_SDL_event();
+
+
+    void reset_magnetic();
+    void draw_magnetic();
+    void update_magnetic(int, int, int, int, uint8_t*);
 
     void reset_potential();
     void draw_potential();
