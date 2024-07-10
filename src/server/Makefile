@@ -1,4 +1,5 @@
 # Compiler
+#CXX=g++ -std=c++20
 CXX=g++
 
 # Compiler flags
@@ -14,7 +15,7 @@ SRCS=connection_handler.cpp ../event_queue.cpp game_engine.cpp state_machine_pla
 # Object files
 OBJS=$(SRCS:.cpp=.o)
 
-LIBS=-lOpenCL
+LIBS=-lOpenCL -lpthread
 
 # Default target
 all: $(TARGET)

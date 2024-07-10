@@ -137,10 +137,15 @@ void frontEnd::on_mousebuttondown(uint8_t *data){
 
 void frontEnd::init(){
 
-    unsigned width = 300;
-    unsigned height = 700;
-    std::string ip =  "127.0.0.1";
-    unsigned port = 8080;
+    unsigned width = 1000;
+    unsigned height = 1000;
+    // std::string ip =  "127.0.0.1";
+    // unsigned port = 8080;
+
+    std::string ip =  "79.116.69.38";
+    unsigned port = 32968;
+
+     
 
     // Initialize graphics
     gr.init(width, height);
