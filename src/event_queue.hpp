@@ -6,17 +6,50 @@
 
 
 class event_queue{
-    public:
-        unsigned tail, head, queue_size;
-        uint8_t **events;
-        std::mutex mutex;
 
-    event_queue(unsigned size);
-    ~event_queue();
-    
-    int add_event(uint8_t *);
-    int print_queue_data();
-    void read(int*, uint8_t**);
+    private:
+        std::mutex mutex;
+        unsigned tail, head, queue_size, queue_width;
+        int event_queue_verbose;
+        
+
+    public:
+        
+        uint8_t **events;
+        
+        event_queue(unsigned, unsigned, int event_queue_verbose = 0);
+        ~event_queue();
+        
+        void add_event(uint8_t *);
+        void pop_oldest(int*, uint8_t*);
+
+};
+
+
+class buffer{
+
+    private:
+        std::mutex mutex, mutex_lock;
+        unsigned tail, head, queue_size, queue_width;
+        int buffer_verbose;
+        bool locked; 
+        uint8_t **data;
+
+    public:
+        
+        
+        uint8_t *write_data, *read_data;
+        
+        
+        ~buffer();
+        
+        buffer(unsigned, unsigned, int buffer_verbose = 0);
+        void peek(uint8_t*);
+        void update_tail();
+        void update_tail_by1();
+        void lock();
+        void unlock();
+        void reset();
 
 };
 
@@ -180,7 +213,6 @@ template <> class Event <EV_UPDATE_STATUS>{
         }
         ~Event(){}; 
 };
-
 
 template <> class Event <EV_STREAM>{
     public:
@@ -353,7 +385,6 @@ template <> class Event <EV_SEND_POT>{
 
         ~Event(){};
 };
-
 
 template <> class Event <EV_SEND_MAG>{
     public:

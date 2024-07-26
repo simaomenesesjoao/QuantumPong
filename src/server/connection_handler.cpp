@@ -1,7 +1,5 @@
-#include <cstdint>
 #include <unistd.h>
 #include <semaphore.h>
-#include <mutex>
 #include <iostream>
 #include "../macros.hpp"
 #include "../event_queue.hpp"
@@ -78,9 +76,7 @@ void connection_handler::process_connections(){
         }
         // This line only runs if a new player has been added
         connection_status[player_number] = 1;
-        
-        Event<EV_CONNECT> event(player_number, new_socket);
-        eq->add_event(event.buffer_b); 
+        eq->add_event(Event<EV_CONNECT>(player_number, new_socket).buffer_b); 
 
     }
 

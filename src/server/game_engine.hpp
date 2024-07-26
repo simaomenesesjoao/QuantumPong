@@ -26,6 +26,7 @@ class game_engine{
 
         game_engine();
         void init();
+        void event_loop();
         void game_loop();
         void finalize();
 };

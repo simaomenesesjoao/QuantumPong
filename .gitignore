@@ -1,4 +1,5 @@
 src/server/QuantumPong
+src/client/QuantumPongClient
 src/server/*.o
 src/client/client
 src/client/*.o

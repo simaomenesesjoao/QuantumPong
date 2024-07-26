@@ -57,5 +57,5 @@ $(TARGET): $(SRC_OBJ) $(CLIENT_OBJ) $(SERVER_OBJ) $(TEST_OBJ)
 
 # Clean up build files
 clean:
-	rm -f $(SRC_OBJ) $(CLIENT_OBJ) $(SERVER
+	rm -f $(SRC_OBJ) $(CLIENT_OBJ) $(SERVER_OBJ) $(TEST_OBJ)
 

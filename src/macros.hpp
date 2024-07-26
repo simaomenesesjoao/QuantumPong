@@ -4,17 +4,18 @@
 // Debug variables
 #define VERBOSE 2
 #define PSTREAMER_DEBUG 1
+
+#define EVENT_QUEUE_VERBOSE 0
+
 #define S_ON_ENTRY 1
 #define S_ON_HANDLER 1
 
 #define P_ON_ENTRY 1 
 #define P_ON_HANDLER 1 
 
-
-
-
-#define EV_GENERIC -1
+#define EV_GENERIC 111
 #define EV_CONNECT 0
+#define EV_CONNECT_REPLY 19
 #define EV_DISCONNECT 1
 #define EV_CHANGE_SCREEN 2
 #define EV_SEND_INIT_INFO 3
@@ -32,6 +33,9 @@
 #define EV_UNPAUSE_GAME 15
 #define EV_END_SCREEN 16
 #define EV_PADDLE_UPDATE 17
+#define EV_EXIT 18
+// #define 19 taken 19
+#define EV_REQ_LISTENER 20
 
 // Player colors
 #define P1R 255

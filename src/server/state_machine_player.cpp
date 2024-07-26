@@ -37,6 +37,25 @@ void Player::streamer(){
     }
 }
 
+
+
+void Player::request_client_listener(){
+    
+
+    if(VERBOSE>0){ std::cout << "Entered Player::request_client_listener for player " << playerNumber << "\n" << std::flush;}
+
+
+    while(checker_running){
+        std::cout << "checking if client has listener on.\n";
+        sender(Event<EV_SEND_INIT_INFO>(playerNumber).buffer_b, HEADER_LEN);
+        usleep(100*1000);
+    }
+
+    if(VERBOSE>0){ std::cout << "Left Player::request_client_listener for player " << playerNumber << "\n" << std::flush;}
+
+
+}
+
 void Player::listener(){
     // Receives events from the remote client
     
@@ -45,7 +64,7 @@ void Player::listener(){
     if(VERBOSE>0){ std::cout << "Entered listener for player " << playerNumber << " in socket " << socket << "\n";}
 
 
-    while (state != PlayerDisconnected) {
+    while (listener_running) {
         int result = recv(socket, read_buf, HEADER_LEN*sizeof(uint8_t), MSG_WAITALL);
         std::cout << "socket: " << socket << "read res: " << result << "\n" << std::flush;
 
@@ -93,13 +112,15 @@ void Player::addConnectionHandler(connection_handler *conn){
 
 Player::Player(int pNum){
     playerNumber = pNum;
-    delay_streamer = 100*1000; 
+    delay_streamer = 100*1000;
 
-    socket = -1;
-    activeHandler = &Player::PlayerDisconnectedHandler;
-    state = PlayerDisconnected;
-    stateString = "PlayerDisconnected";
 
+}
+
+void Player::init(){
+    std::cout << "entered Player::init\n" << std::flush;
+    PlayerDisconnectedOnEntry();
+    std::cout << "left Player::init\n" << std::flush;
 }
 
 Player::~Player(){
@@ -117,34 +138,38 @@ void Player::handle(uint8_t* data){(this->*activeHandler)(data);}
 
 
 
-
-
-
-// void Player::ProcessDisconnection(uint8_t* data){
-//     Event<EV_GENERIC> evg(data);
-// }
-
 void Player::PlayerDisconnectedOnEntry(){
     state = PlayerDisconnected;
     stateString = "PlayerDisconnected";
     activeHandler = &Player::PlayerDisconnectedHandler;
     connection->connection_status[playerNumber] = false;
+    listener_running = false;
     socket = -1;
+    checker_running = false;
 }
 
 void Player::PlayerDisconnectedHandler(uint8_t* data){
     std::cout << "PlayerDisconnectedHandler " << playerNumber << "\n";
     Event<EV_GENERIC> evg(data);
 
+    // launch the listener and check if the client has launched its listener
     if(evg.event_ID == EV_CONNECT && evg.player_number == playerNumber){
         Event<EV_CONNECT> ev(data);
         socket = ev.socket;
-
-        activeHandler = &Player::PlayerIdleHandler;            
-        sender(Event<EV_SEND_INIT_INFO>(playerNumber).buffer_b, HEADER_LEN);
-        PlayerIdleOnEntry();
-        
+        listener_running = true;
+        checker_running = true;
         threads.push_back(std::thread(&Player::listener, this));
+        usleep(500*1000);
+        sender(Event<EV_SEND_INIT_INFO>(playerNumber).buffer_b, HEADER_LEN);
+    }
+
+    // once the client's listener is ready, we can send events to it
+    // std::cout << "id,num:" <<  evg.event_ID << " " << evg.player_number << "\n";
+    if(evg.event_ID == EV_CONNECT_REPLY && evg.player_number == playerNumber){
+        
+        checker_running = false;
+        activeHandler = &Player::PlayerIdleHandler;
+        PlayerIdleOnEntry();
 
     }
 
@@ -274,6 +299,7 @@ void Player::onSend_Pot(uint8_t* data){
         dy += y;
         y = 0;
     }
+    
     int buf_size = dx*dy;
 
     event.payload_size = buf_size;

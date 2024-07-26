@@ -82,6 +82,9 @@ void Server::GameOffOnEntry(){
     if(S_ON_ENTRY) std::cout << "Server::GameOffOnEntry\n";
     state = GameOff;
     stateString = "GameOff";
+    engine->paused = true;
+    engine->reset_state();
+    
 }
 
 void Server::GameOffHandler(uint8_t* data){

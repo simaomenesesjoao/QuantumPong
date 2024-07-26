@@ -949,8 +949,6 @@ void simulator::update_pixel(){
     cl::NDRange offset;
     cl::NDRange global_size;
     cl::NDRange local_size;
-    // Update the pixels on the screen
-    // if showcase==true, then the potentials and the paddles wont be drawn
 
     // Get wavefunction
     offset      = cl::NDRange{(cl::size_type)(pad), (cl::size_type)(pad)};
@@ -962,7 +960,7 @@ void simulator::update_pixel(){
     int4 *array = new int4[Npixels];
     queue.enqueueReadBuffer(   pix_buf, CL_TRUE, 0, sizeof(int4)*Npixels, array);
 
-    // Plot the wavefunction
+    // CHANGE: is this loop really needed? jst use array.y?
     int m, n;
     for(int r = 0; r < Ly; r++){
         for(int c = 0; c < Lx; c++){
@@ -974,22 +972,6 @@ void simulator::update_pixel(){
             // buffer[4*m+3] = array[n].w;
         }
     }
-
-    // Get magnetic field
-    // queue.enqueueNDRangeKernel(colormapB,  offset, global_size, local_size);
-    // queue.enqueueReadBuffer(   pix_buf, CL_TRUE, 0, sizeof(int4)*Npixels, array);
-
-    // for(int r = 0; r < Ly; r++){
-    //     for(int c = 0; c < Lx; c++){
-    //         m = r*vis_width + c;
-    //         n = r*Lx + c;
-    //         data[4*m+2] = std::min(255, data[4*m+2] + array[n].z); // Edit the red channel
-    //     }
-    // }
-
-
-
-
 
     delete[] array;
 
@@ -1021,7 +1003,7 @@ void simulator::init(unsigned Lx, unsigned Ly, int delay){
     unsigned local = 2;
 
     // Time evolution operator parameters
-    float dt = 2.0/10; // CHANGE
+    float dt = 2.0/1; // CHANGE
     unsigned Ncheb = 10;
 
     // initial wavefunction parameters: center, momentum, spread
@@ -1055,34 +1037,34 @@ void simulator::init(unsigned Lx, unsigned Ly, int delay){
 
 void simulator::loop(){
 
-    unsigned Ntimes = 200000;
-    
-    float max = 0;
-    float threshhold = 0;
-    
+
     auto start = std::chrono::system_clock::now();
 
-    // CHANGE: Replace this with while true
     processed_victory = false;
-    for(unsigned j=0; j<Ntimes; j++){
+    int j = 0;
+    while(true){
+                
         
-        // CHANGE: the colormap will be implemented client-side. This function can be modified
-        if(j%4==0) // requires some processing
+        if(j%4==0){ // requires some processing, don't run all the time
+            float threshhold;
             get_norm(&max, &threshhold);
+            set_max(threshhold);
+        }
+        j++;
 
         if(norm_top > 0.5 && !processed_victory){
             eq->add_event(Event<EV_PLAYER_WON>(1).buffer_b);
             processed_victory = true;
-            reset_state();
+            
 
         } else if(norm_bot > 0.5 && !processed_victory){
             eq->add_event(Event<EV_PLAYER_WON>(0).buffer_b);
             processed_victory = true;
-            reset_state();
+            
 
         } else {
             
-            set_max(threshhold);
+            
             
             // if(engine.pressed_showcase) engine.clear_wf_away_from_pot(visual.image->data, visual.width, visual.height);
             if(!paused){
@@ -1093,6 +1075,7 @@ void simulator::loop(){
                 // colormap will be done client-side
                 update_pixel();
             }
+
             if(absorb_on) absorb();
 
             

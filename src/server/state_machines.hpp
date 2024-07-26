@@ -30,6 +30,8 @@ public:
 
     void (Player::*activeHandler)(uint8_t*);
 
+    bool listener_running;
+    bool checker_running;
 
     int playerNumber;
     int socket;
@@ -43,8 +45,10 @@ public:
 
     Player(int pNum);
     ~Player();
+    void init();
     void streamer();
     void listener();
+    void request_client_listener();
     void sender(uint8_t*, unsigned);
     void setStreamerDelayMS(int);
     void addEventQueue(event_queue*);

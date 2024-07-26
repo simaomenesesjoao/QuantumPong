@@ -7,17 +7,16 @@
 
 
 game_engine::game_engine():
-    player1(0), player2(1), eventQueue(300){}
+    player1(0), player2(1), eventQueue(300, HEADER_LEN, 0){}
 
-void game_engine::game_loop(){
-    
-    
-    int event = -1;
-    uint8_t *data;
+
+void game_engine::event_loop(){
+    int event;
+    uint8_t data[HEADER_LEN];
 
     while(true){
         usleep(delay_event_loop);
-        eventQueue.read(&event, &data);
+        eventQueue.pop_oldest(&event, data);
         if(event<0) continue;
         
         player1.handle(data);
@@ -25,16 +24,23 @@ void game_engine::game_loop(){
         server.handle(data);
         std::cout << "event:" << event << " ----- states after: " << player1.stateString << " " << player2.stateString << " " << server.stateString << "\n";
     }
-    
+}
+
+void game_engine::game_loop(){
+    // Start the threads
+    threads.push_back(std::thread(&game_engine::event_loop, this));
+    threads.push_back(std::thread(&connection_handler::process_connections, &conn));
+    threads.push_back(std::thread(&simulator::loop, &engine));
 }
 
 
 void game_engine::init(){
+    std::cout << "entered game_engine::init\n" << std::flush;
     // Initialize the game with some default values
     int ms = 1000;
 
     delay_event_loop = 5*ms; 
-    delay_streamer = 50*ms;
+    delay_streamer = 100*ms;
     delay_simulation = 25*ms;
 
     unsigned Lx = 300;
@@ -69,10 +75,10 @@ void game_engine::init(){
     server.addPlayers(&player1, &player2);
     server.addSimulator(&engine);
 
+    player1.init();
+    player2.init();
 
-    // Start the threads
-    threads.push_back(std::thread(&connection_handler::process_connections, &conn));
-    threads.push_back(std::thread(&simulator::loop, &engine));
+    std::cout << "left game_engine::init\n" << std::flush;
 }
 
 void game_engine::finalize(){
