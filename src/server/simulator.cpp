@@ -790,6 +790,7 @@ float simulator::get_norm(float *maximum, float *threshhold){
         }
     }
 
+    std::cout << "SCORES, top bot: " << norm_top << " " << norm_bot << "\n";
     // Event<EV_STREAM> event(buffer_f);
     // event.score_bot = norm_bot;
     // event.score_top = norm_top;
@@ -990,7 +991,7 @@ void simulator::absorb(){
 
     queue.enqueueNDRangeKernel(kabsorb,  offset, global_size, local_size);
 
-    offset      = cl::NDRange{(cl::size_type)(pad), (cl::size_type)(Ly-absorption_width-pad)};
+    offset      = cl::NDRange{(cl::size_type)(pad), (cl::size_type)(pad+Ly-absorption_width)};
     global_size = cl::NDRange{(cl::size_type)(Lx), (cl::size_type)(absorption_width)};
     local_size  = cl::NDRange{(cl::size_type)(local), (cl::size_type)(local)};
 
@@ -1074,9 +1075,9 @@ void simulator::loop(){
                 // CHANGE: Replace this function name and functionality, since the 
                 // colormap will be done client-side
                 update_pixel();
+            
+                if(absorb_on) absorb();
             }
-
-            if(absorb_on) absorb();
 
             
         }

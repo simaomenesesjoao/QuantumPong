@@ -15,6 +15,11 @@ StateDisconnected::StateDisconnected(frontEnd *contex):
     
     std::string ip =  "127.0.0.1";
     unsigned port = 8080;
+
+
+    // std::string ip =  "213.181.110.225";
+    // unsigned port = 42381;
+
     connector_running = true;
     listener_running = false;
     worker_thread = std::thread(&StateDisconnected::connect_to_server, this, ip, port);
