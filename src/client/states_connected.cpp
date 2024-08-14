@@ -126,8 +126,7 @@ void StateConnected::handle(uint8_t *data){
 
 void StateConnected::listen_server_events(int sock){
 
-    fd_set readfds;
-    struct timeval timeout;
+    
     uint8_t buffer_header[HEADER_LEN];
     unsigned Nbytes_header = HEADER_LEN;
     
@@ -135,6 +134,8 @@ void StateConnected::listen_server_events(int sock){
         // Set up the fd_set for select. These structs get modified by 'select', so it's
         // required to reset them everytime
         
+        fd_set readfds;
+        struct timeval timeout;
         FD_ZERO(&readfds);
         FD_SET(sock, &readfds);        
         timeout.tv_usec = 0;
@@ -142,7 +143,6 @@ void StateConnected::listen_server_events(int sock){
         int activity = select(sock + 1, &readfds, nullptr, nullptr, &timeout);
 
         if(activity==0){
-            // std::cout << "no activity on sock " << sock << "\n";
             continue;
 
         } else if (activity < 0) {
@@ -150,8 +150,16 @@ void StateConnected::listen_server_events(int sock){
             break;        
         }
     
-        // std::cout << "Listener on sock " << sock <<  " \n" << std::flush;
-        int bytesReceived = recv(sock, buffer_header, Nbytes_header*sizeof(uint8_t), MSG_WAITALL);
+        // Ensure the whole set of Nbytes_header bytes is read. TCP may fragment or join packets together
+        int bytesReceived = 0;
+        while(bytesReceived<Nbytes_header){
+            int n = recv(sock, buffer_header+bytesReceived, (Nbytes_header-bytesReceived)*sizeof(uint8_t), MSG_WAITALL);
+            if(n<=0){
+                bytesReceived = 0;
+                break;
+            }
+            bytesReceived += n;
+        }
         // std::cout << "Listener received something on sock " << sock <<  " \n" << std::flush;
 
         if(bytesReceived <= 0){
@@ -198,7 +206,21 @@ void StateConnected::listen_server_events(int sock){
                 
             std::cout << "reading from payload\n" << std::flush;
             buf->lock();
-            int bytesReceivedPayload = recv(sock, buf->write_data, payload_size*sizeof(uint8_t),MSG_WAITALL);
+            
+            int bytesReceivedPayload = 0;
+            while(bytesReceivedPayload < payload_size){
+                int n = recv(sock, buf->write_data + bytesReceivedPayload, 
+                    (payload_size-bytesReceivedPayload)*sizeof(uint8_t),MSG_WAITALL);
+                if(n<=0){
+                    bytesReceivedPayload = 0;
+                    break;
+                }
+                bytesReceivedPayload += n;
+            }
+            
+             
+
+
             buf->unlock();
             std::cout << "finished reading from payload\n" << std::flush;
 

@@ -17,8 +17,8 @@ StateDisconnected::StateDisconnected(frontEnd *contex):
     unsigned port = 8080;
 
 
-    // std::string ip =  "213.181.110.225";
-    // unsigned port = 42381;
+    //  std::string ip =  "79.116.178.211";
+    //  unsigned port = 26720;
 
     connector_running = true;
     listener_running = false;
