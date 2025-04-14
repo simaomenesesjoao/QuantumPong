@@ -3,7 +3,7 @@
 CXX=g++
 
 # Compiler flags
-CXXFLAGS=-Wall 
+CXXFLAGS=-Wall -O3
 
 # Output executable name
 TARGET=QuantumPong

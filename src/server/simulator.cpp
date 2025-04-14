@@ -46,6 +46,7 @@ void simulator::init_cl(){
 
     context = cl::Context(device);
 
+    //exit(1);
 
     queue = cl::CommandQueue(context, device);
 }
