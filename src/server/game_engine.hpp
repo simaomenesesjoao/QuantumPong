@@ -3,32 +3,25 @@
 
 #include <thread>
 #include <vector>
-#include <mutex>
-#include "state_machines.hpp"
+#include "simulator.hpp"
 #include "connection_handler.hpp"
 
-class game_engine{
-    public:
+class game_engine {
+public:
+    game_engine() = default;
 
-        int delay_event_loop;
-        int delay_streamer;
-        int delay_simulation;
+    void init(unsigned port);
+    void run();      // launches threads, blocks until done
+    void finalize();
 
-        std::mutex mutex;
-        std::vector<std::thread> threads;
+private:
+    simulator          engine;
+    connection_handler conn;
+    std::vector<std::thread> threads;
 
-        event_queue eventQueue;
-        connection_handler conn;
-        simulator engine;
-        Player player1;
-        Player player2;
-        Server server;
+    int delay_streamer   = 100000;
 
-        game_engine();
-        void init();
-        void event_loop();
-        void game_loop();
-        void finalize();
+    void streamer();
 };
 
 #endif // GAME_ENGINE_H

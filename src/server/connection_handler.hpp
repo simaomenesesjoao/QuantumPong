@@ -1,28 +1,28 @@
 #ifndef CONNECTION_HANDLER_H
 #define CONNECTION_HANDLER_H 1
 
-#include "../event_queue.hpp"
 #include <netinet/in.h>
+#include <mutex>
+#include <cstdint>
+#include <cstddef>
+
+class simulator;
 
 class connection_handler {
-    public:
-
-        bool connection_status[2];
-        int number_of_players;
-        event_queue *eq;
-
-        int server_fd, new_socket;
-        struct sockaddr_in address;
-        int opt = 1;
-        int addrlen = sizeof(address);
-        bool accepting_connections;
-
-
-    connection_handler();
-    void addEventQueue(event_queue*);
+public:
+    connection_handler() = default;
 
     void init(unsigned port);
-    void process_connections();
+    void accept_and_listen(simulator *sim); // blocks; call in its own thread
+    void send(const uint8_t *data, size_t len);
+
+private:
+    int server_fd      = -1;
+    int gateway_socket = -1;
+    struct sockaddr_in address {};
+    int addrlen = sizeof(address);
+    int opt     = 1;
+    std::mutex send_mutex;
 };
 
-#endif 
+#endif // CONNECTION_HANDLER_H

@@ -16,10 +16,22 @@ void kernel set_sq(__global float2 *hops, __global float *scale){
 
 }
 
-void kernel set_sq_B(__global float2 *hops, __global float *SCALE, __global float *B, __global float *V){
+// fill_rect: set all cells in the NDRange region to val[0]
+void kernel fill_rect(__global float *buf, __global float *val){
+    int x = get_global_id(0);
+    int y = get_global_id(1);
+    if(x >= 0 && x < LX && y >= 0 && y < LY){
+        buf[y*LX + x] = val[0];
+    }
+}
+
+// set_sq_B: build Hamiltonian hopping elements from static potential V,
+// paddle potential P, and magnetic field B (Peierls phases)
+void kernel set_sq_B(__global float2 *hops, __global float *SCALE, __global float *B, __global float *V, __global float *P){
 
     int x = get_global_id(0);
     int y = get_global_id(1);
+    if (x >= LX || y >= LY) return;
 
     int i = y*LX + x;
     int i5 = NHOPS*i;
@@ -27,25 +39,21 @@ void kernel set_sq_B(__global float2 *hops, __global float *SCALE, __global floa
     int j = (y+PAD)*L + (x+PAD);
 
     float t = -1.0/SCALE[0];
+    float localV = (V[i])/SCALE[0];
 
-    float arg1 = 0.5*(B[j]+B[j-1])*y;
-    float arg2 = 0.5*(B[j]+B[j+1])*y;
-    float localV = V[i]/SCALE[0];
-    //if( B[j-1]*B[j-1] > 0.1)
-        //printf("B: %f %f %f", B[j], B[j-1], B[j+1]);
-
-    //float arg1 = 0;
-    //float arg2 = 0;
-    //float localV = 0;
-
+    // Peierls phases on horizontal links — Landau gauge (A_x = -B·y, A_y = 0).
+    // arg1 = line integral of A_x along the leftward link to (x-1,y);
+    // arg2 the corresponding rightward link to (x+1,y). Opposite directions
+    // pick up opposite phase signs.
+    float arg1 = 0.5f*(B[j]+B[j-1])*y;
+    float arg2 = 0.5f*(B[j]+B[j+1])*y;
     float2 peierls1 = (float2)(t*cos(arg1),  t*sin(arg1));
     float2 peierls2 = (float2)(t*cos(arg2), -t*sin(arg2));
-
     hops[i5+0] = (float2)(localV, 0.0); // Local potential
-    hops[i5+1] = peierls1;
-    hops[i5+2] = peierls2;
-    hops[i5+3] = (float2)(  t, 0.0); // from up
-    hops[i5+4] = (float2)(  t, 0.0); // from down
+    hops[i5+1] = peierls1;              // from left  (with phase)
+    hops[i5+2] = peierls2;              // from right (with phase)
+    hops[i5+3] = (float2)(t, 0.0);      // from up    (no phase in Landau gauge A_y=0)
+    hops[i5+4] = (float2)(t, 0.0);      // from down
 
 }
 
@@ -146,26 +154,26 @@ void kernel clear_local_pot(__global float2 *hops, __global float *pot, __global
 
 void kernel cheb2(__global float2 *input, __global float2 *output, __global float2 *hops, __global float2 *acc, __global float2 *jn){
 
-
+    if (get_global_id(0) >= LX+PAD || get_global_id(1) >= LY+PAD) return;
     int L = LX + 2*PAD;
     int j = (get_global_id(1)-PAD)*LX + (get_global_id(0)-PAD);
     int i = get_global_id(1)*L + get_global_id(0);
     int j4 = NHOPS*j;
 
     float2 sum = (float2)(0.0, 0.0);
-    sum += prod(input[i],  hops[j4]);
-    sum += prod(input[i-1],hops[j4+1]);
-    sum += prod(input[i+1],hops[j4+2]);
-    sum += prod(input[i-L],hops[j4+3]);
-    sum += prod(input[i+L],hops[j4+4]);
+    sum += prod(input[i],   hops[j4]);
+    sum += prod(input[i-1], hops[j4+1]);
+    sum += prod(input[i+1], hops[j4+2]);
+    sum += prod(input[i-L], hops[j4+3]);
+    sum += prod(input[i+L], hops[j4+4]);
 
     output[i] = 2*sum - output[i]; 
-    acc[i] += prod(output[i],jn[0]);
+    acc[i] += prod(output[i], jn[0]);
 }
 
 void kernel cheb1(__global float2 *input, __global float2 *output, __global float2 *hops, __global float2 *acc, __global float2 *j0, __global float2 *j1){
 
-
+    if (get_global_id(0) >= LX+PAD || get_global_id(1) >= LY+PAD) return;
     int L = LX + 2*PAD;
     int j = (get_global_id(1)-PAD)*LX + (get_global_id(0)-PAD);
     int i = get_global_id(1)*L + get_global_id(0);
@@ -186,28 +194,12 @@ void kernel cheb1(__global float2 *input, __global float2 *output, __global floa
 }
 
 
-void kernel colormap(__global float2 *acc, __global int4 *pix, __global float *max){
-    float m = max[0];
+void kernel colormap(__global float2 *acc, __global float *pix){
+    if (get_global_id(0) >= LX+PAD || get_global_id(1) >= LY+PAD) return;
     int L = LX + 2*PAD;
     int j = (get_global_id(1)-PAD)*LX + (get_global_id(0)-PAD);
     int i = get_global_id(1)*L + get_global_id(0);
-
-    //int value = (int)(255*(acc[i].x/max));
-    int value = (int)(255*(acc[i].x*acc[i].x + acc[i].y*acc[i].y)/m/m);
-    int valueo2 = value/2;
-    int valueo3 = value/3;
-    if(value>255) value=255;
-    if(valueo2>255) valueo2=255;
-    if(valueo3>255) valueo3=255;
-
-    //printf("max %f\n", m);
-    //printf("%d %d %d %d %d\n", get_global_id(0) ,get_global_id(1), i, j, value);
-    //printf("%d %d %d %d %f %f %d\n", get_global_id(0) ,get_global_id(1), i, j, acc[i].x, acc[i].y, value);
-    //int value = 0;
-    pix[j].x = valueo2; // B
-    pix[j].y = value;   // G
-    pix[j].z = valueo3; // R
-    pix[j].w = 0;       // A
+    pix[j] = acc[i].x*acc[i].x + acc[i].y*acc[i].y;
 }
 
 void kernel colormapV(__global float *pot, __global int4 *pix){
@@ -221,9 +213,9 @@ void kernel colormapV(__global float *pot, __global int4 *pix){
     //printf("%d %d %d %d %f %f %d\n", get_global_id(0) ,get_global_id(1), i, j, acc[i].x, acc[i].y, value);
     //int value = 0;
     pix[i].x = value; // B
-    pix[i].y = 0;   // G
+    pix[i].y = 0; // G
     pix[i].z = 0; // R
-    pix[i].w = 0;       // A
+    pix[i].w = 0; // A
 }
 
 
@@ -253,7 +245,7 @@ void kernel absorb(__global float2 *array, __global float *score){
     int y = get_global_id(1);
     int i = y*L + get_global_id(0);
 
-    float dif = 0.95;
+    float dif = 0.8;
     float re = array[i].x;
     float im = array[i].y;
 
@@ -265,13 +257,47 @@ void kernel absorb(__global float2 *array, __global float *score){
 }
 
 
+// absorb_zone: per-cell scoring absorber driven by a signed mask on the
+// interior grid. mask[j] > 0 → positive zone; mask[j] < 0 → negative zone;
+// |mask[j]| is the weight applied to absorbed |ψ|². Cells where mask=0 are
+// untouched. NDRange is the full interior grid with offset (PAD, PAD).
+void kernel absorb_zone(__global float2 *array,
+                        __global const float *zone_mask,
+                        __global float *score_pos,
+                        __global float *score_neg){
+    int xg = get_global_id(0);
+    int yg = get_global_id(1);
+    int x = xg - PAD, y = yg - PAD;
+    if (x < 0 || x >= LX || y < 0 || y >= LY) return;
+
+    int j = y*LX + x;
+    float w = zone_mask[j];
+    if (w == 0.0f) return;
+
+    int L = LX + 2*PAD;
+    int i = yg*L + xg;
+    float dif = 0.8f;
+    float re = array[i].x;
+    float im = array[i].y;
+    float absorbed = (1.0f - dif*dif) * (re*re + im*im) * fabs(w);
+
+    if (w > 0.0f) score_pos[j] += absorbed;
+    else          score_neg[j] += absorbed;
+
+    array[i].x = dif*re;
+    array[i].y = dif*im;
+}
+
+
 void kernel copy(__global float2 *from, __global float2 *to){
+    if (get_global_id(0) >= LX+PAD || get_global_id(1) >= LY+PAD) return;
     int L = LX + 2*PAD;
     int i = get_global_id(1)*L + get_global_id(0);
     to[i] = from[i];
 }
 
 void kernel reset(__global float2 *array){
+    if (get_global_id(0) >= LX+PAD || get_global_id(1) >= LY+PAD) return;
     int L = LX + 2*PAD;
     int i = get_global_id(1)*L + get_global_id(0);
     array[i].x = 0;

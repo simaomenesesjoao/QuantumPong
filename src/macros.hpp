@@ -1,70 +1,27 @@
 #ifndef MACROS_H
 #define MACROS_H 1
 
-// Debug variables
-#define VERBOSE 2
-#define PSTREAMER_DEBUG 1
+// Commands: gateway → C++ server
+#define CMD_START         0x01  // full reinit + start streaming
+#define CMD_STOP          0x02  // halt simulation, preserve state
+#define CMD_RESUME        0x03  // restart from current state (no reinit)
+#define CMD_MOVE_PADDLE   0x04  // move a paddle by normalised direction
+#define CMD_SET_WELL      0x05  // add a static potential well
+#define CMD_SET_POTENTIAL_SHAPES 0x06  // (legacy) polygon-only V shapes
+#define CMD_SET_ABSORBING        0x07  // enable/disable boundary absorption
+#define CMD_SET_FIELDS           0x08  // tagged-union shape list (V, all kinds)
+#define CMD_SET_UNIFORM_B        0x09  // fill mag_buf with a uniform value
+#define CMD_SET_SCORE_ZONES      0x0A  // puzzle-mode positive/negative absorbing zones
 
-#define EVENT_QUEUE_VERBOSE 0
+// Frames: C++ server → gateway
+#define FRAME_WAVEFUNCTION 0x10
 
-#define S_ON_ENTRY 1
-#define S_ON_HANDLER 1
-
-#define P_ON_ENTRY 1 
-#define P_ON_HANDLER 1 
-
-#define EV_GENERIC 111
-#define EV_CONNECT 0
-#define EV_CONNECT_REPLY 19
-#define EV_DISCONNECT 1
-#define EV_CHANGE_SCREEN 2
-#define EV_SEND_INIT_INFO 3
-#define EV_PRESSED_SPACE 4
-#define EV_UPDATE_STATUS 5
-#define EV_STREAM 6
-#define EV_PLAYER_WON 7
-#define EV_PRESSED_KEY 8
-#define EV_MOUSEBUTTONDOWN 9
-#define EV_SEND_POT 10
-#define EV_SEND_MAG 11
-#define EV_START_GAME 12
-#define EV_QUIT_GAME 13
-#define EV_PAUSE_GAME 14
-#define EV_UNPAUSE_GAME 15
-#define EV_END_SCREEN 16
-#define EV_PADDLE_UPDATE 17
-#define EV_EXIT 18
-// #define 19 taken 19
-#define EV_REQ_LISTENER 20
-
-// Player colors
-#define P1R 255
-#define P1G 160
-#define P1B 0
-
-#define P2R 0
-#define P2G 100
-#define P2B 255
-
-
-// Variables
-#define PAYLOAD_OFF 0
-#define PAYLOAD_ON 1
-
-#define EV_SDL_QUIT 0
-#define EV_SDL_SPACE 3
-
-#define HEADER_LEN 100
-
-#define KEY_w 0
-#define KEY_a 1
-#define KEY_s 2
-#define KEY_d 3
-#define KEY_n 4
-#define KEY_esc 5
-#define KEY_return 6
-
-#define BUTTON_LEFT 1
-#define BUTTON_RIGHT 3
+// Header layout (32 bytes, little-endian):
+//   [0]    cmd/frame id  uint8
+//   [1]    pad           uint8
+//   [2-3]  pad           uint16
+//   [4-7]  payload_size  uint32
+//   [8-31] data          uint8[24]  (command-specific)
+#define HEADER_LEN 32
 
 #endif // MACROS_H

@@ -6,3 +6,4 @@ src/client/*.o
 src/*.o
 tests/*.o
 tests/test1
+build
